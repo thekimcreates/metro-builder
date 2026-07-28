@@ -2,7 +2,7 @@
 
 **Build beyond the grid.**
 
-MetroBuilder is a Fabric construction toolkit intended for Minecraft Transit Railway station builders. The `0.1.0-alpha` rewrite establishes a stable client/server foundation for precise display-based construction.
+MetroBuilder is a Fabric construction toolkit intended for Minecraft Transit Railway station builders.
 
 ## Current development controls
 
