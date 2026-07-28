@@ -1,0 +1,9 @@
+{
+  "key.category.metrobuilder": "MetroBuilder",
+  "key.metrobuilder.next_tool": "Next Tool",
+  "key.metrobuilder.previous_tool": "Previous Tool",
+  "key.metrobuilder.undo": "Undo",
+  "key.metrobuilder.redo": "Redo",
+  "message.metrobuilder.placed": "MetroBuilder display placed",
+  "message.metrobuilder.no_permission": "You do not have permission to build here"
+}
