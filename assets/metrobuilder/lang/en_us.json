@@ -7,9 +7,5 @@
   "item.metrobuilder.duplicate_tool": "Duplicate Tool",
   "item.metrobuilder.delete_tool": "Delete Tool",
   "item.metrobuilder.rail_tool": "Rail Tool",
-  "item.metrobuilder.platform_generator": "Platform Generator",
-  "item.metrobuilder.metrobuilder_logo": "MetroBuilder",
-  "key.metrobuilder.rotate_left": "Rotate Builder Wand Left",
-  "key.metrobuilder.rotate_right": "Rotate Builder Wand Right",
-  "key.category.metrobuilder": "MetroBuilder"
+  "item.metrobuilder.platform_generator": "Platform Generator"
 }

@@ -1,7 +1,7 @@
 package dev.metrobuilder.display;
 
-import dev.metrobuilder.network.PlaceDisplayPayload;
 import net.minecraft.block.Block;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.nbt.NbtCompound;
@@ -9,41 +9,62 @@ import net.minecraft.nbt.NbtHelper;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.BlockPos;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public final class DisplayManager {
-    private static final double MAX_REACH_SQUARED = 64.0 * 64.0;
+    private static final Map<UUID, UUID> PREVIEWS = new HashMap<>();
 
     private DisplayManager() {}
 
-    public static void place(ServerPlayerEntity player, PlaceDisplayPayload payload) {
-        Vec3d position = payload.position();
-
-        if (player.squaredDistanceTo(position) > MAX_REACH_SQUARED
-                || !player.canModifyAt(player.getWorld(), player.getBlockPos())) {
-            return;
+    public static boolean previewOrConfirm(ServerPlayerEntity player, BlockPos position, float yaw, String blockId) {
+        UUID existingId = PREVIEWS.get(player.getUuid());
+        if (existingId != null) {
+            Entity existing = player.getWorld().getEntity(existingId);
+            if (existing != null) {
+                existing.removeCommandTag("metrobuilder.preview");
+                existing.addCommandTag("metrobuilder.display");
+                PREVIEWS.remove(player.getUuid());
+                return true;
+            }
+            PREVIEWS.remove(player.getUuid());
         }
 
-        Identifier id = Identifier.tryParse(payload.blockId());
-        if (id == null || !Registries.BLOCK.containsId(id)) {
-            return;
-        }
+        Identifier id = Identifier.tryParse(blockId);
+        if (id == null || !Registries.BLOCK.containsId(id)) return false;
 
         Block block = Registries.BLOCK.get(id);
-
         DisplayEntity.BlockDisplayEntity entity =
                 new DisplayEntity.BlockDisplayEntity(EntityType.BLOCK_DISPLAY, player.getWorld());
 
-        // BlockDisplayEntity#setBlockState is private in Minecraft 1.20.4.
-        // Load the state through the entity's normal NBT deserialization path instead.
         NbtCompound entityNbt = new NbtCompound();
         entityNbt.put("block_state", NbtHelper.fromBlockState(block.getDefaultState()));
         entity.readNbt(entityNbt);
 
-        entity.setPosition(position.x, position.y, position.z);
-        entity.setYaw(payload.yaw());
-        entity.addCommandTag("metrobuilder.display");
+        entity.setPosition(position.getX(), position.getY(), position.getZ());
+        entity.setYaw(yaw);
+        entity.addCommandTag("metrobuilder.preview");
+        entity.setGlowing(true);
 
         player.getWorld().spawnEntity(entity);
+        PREVIEWS.put(player.getUuid(), entity.getUuid());
+        return false;
+    }
+
+    public static void rotatePreview(ServerPlayerEntity player, float yaw) {
+        UUID id = PREVIEWS.get(player.getUuid());
+        if (id == null) return;
+        Entity entity = player.getWorld().getEntity(id);
+        if (entity != null) entity.setYaw(yaw);
+    }
+
+    public static void cancelPreview(ServerPlayerEntity player) {
+        UUID id = PREVIEWS.remove(player.getUuid());
+        if (id == null) return;
+        Entity entity = player.getWorld().getEntity(id);
+        if (entity != null) entity.discard();
     }
 }

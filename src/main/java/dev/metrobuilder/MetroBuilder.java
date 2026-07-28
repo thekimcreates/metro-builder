@@ -13,6 +13,7 @@ public final class MetroBuilder implements ModInitializer {
     @Override
     public void onInitialize() {
         MetroBuilderItems.register();
+        dev.metrobuilder.network.MetroBuilderNetworking.registerServerReceivers();
         LOGGER.info("MetroBuilder common initialization complete");
     }
 }
