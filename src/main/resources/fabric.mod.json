@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "id": "metrobuilder",
-  "version": "${version}",
+  "version": "1.0.0-alpha.2",
   "name": "MetroBuilder",
   "description": "Precision construction tools for Minecraft Transit Railway builders.",
-  "authors": ["TheKimCreates"],
+  "authors": ["thekimcreates"],
   "contact": {
-    "sources": "https://github.com/thekimcreates/MetroBuilder",
-    "issues": "https://github.com/thekimcreates/MetroBuilder/issues"
+    "sources": "https://github.com/thekimcreates/metro-builder",
+    "issues": "https://github.com/thekimcreates/metro-builder/issues"
   },
   "license": "MIT",
   "environment": "*",
