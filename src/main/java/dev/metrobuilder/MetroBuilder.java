@@ -1,6 +1,6 @@
-package com.thekimcreates.metrobuilder;
+package dev.metrobuilder;
 
-import com.thekimcreates.metrobuilder.item.MetroBuilderItems;
+import dev.metrobuilder.item.MetroBuilderItems;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
