@@ -1,0 +1,3 @@
+package dev.metrobuilder.item.tool;
+import dev.metrobuilder.selection.SelectionManager; import net.minecraft.item.*; import net.minecraft.server.network.ServerPlayerEntity; import net.minecraft.util.ActionResult;
+public final class RotateToolItem extends Item { public RotateToolItem(Settings s){super(s.maxCount(1));} @Override public ActionResult useOnBlock(ItemUsageContext c){if(c.getWorld().isClient)return ActionResult.SUCCESS;if(c.getPlayer() instanceof ServerPlayerEntity p){if(!SelectionManager.requireUsable(p))return ActionResult.FAIL;SelectionManager.rotateClockwise(p);return ActionResult.CONSUME;}return ActionResult.PASS;} }

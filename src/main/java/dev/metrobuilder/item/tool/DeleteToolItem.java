@@ -1,0 +1,3 @@
+package dev.metrobuilder.item.tool;
+import dev.metrobuilder.selection.SelectionManager; import net.minecraft.item.*; import net.minecraft.server.network.ServerPlayerEntity; import net.minecraft.util.ActionResult;
+public final class DeleteToolItem extends Item { public DeleteToolItem(Settings s){super(s.maxCount(1));} @Override public ActionResult useOnBlock(ItemUsageContext c){if(c.getWorld().isClient)return ActionResult.SUCCESS;if(c.getPlayer() instanceof ServerPlayerEntity p){if(p.isSneaking()){SelectionManager.cancelPending(p);return ActionResult.CONSUME;}if(!SelectionManager.requireUsable(p))return ActionResult.FAIL;if(SelectionManager.stageDeleteOrConfirm(p))SelectionManager.delete(p);return ActionResult.CONSUME;}return ActionResult.PASS;} }
