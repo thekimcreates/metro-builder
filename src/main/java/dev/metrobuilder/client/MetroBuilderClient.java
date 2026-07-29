@@ -29,11 +29,16 @@ public final class MetroBuilderClient implements ClientModInitializer {
 
         HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
             MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || client.options.hudHidden ||
-                    !client.player.getMainHandStack().isOf(MetroBuilderItems.BUILDER_WAND)) return;
-            drawContext.drawTextWithShadow(client.textRenderer,
-                    "MetroBuilder Builder Wand  |  [ / ] Rotate  |  Shift + Right-click Cancel",
-                    8, 8, 0xFFFFFF);
+            if (client.player == null || client.options.hudHidden) return;
+            if (client.player.getMainHandStack().isOf(MetroBuilderItems.BUILDER_WAND)) {
+                drawContext.drawTextWithShadow(client.textRenderer,
+                        "MetroBuilder Builder Wand  |  [ / ] Rotate  |  Shift + Right-click Cancel",
+                        8, 8, 0xFFFFFF);
+            } else if (client.player.getMainHandStack().isOf(MetroBuilderItems.PLATFORM_GENERATOR)) {
+                drawContext.drawTextWithShadow(client.textRenderer,
+                        "Platform Generator  |  Left-click Start  |  Right-click End  |  Shift + Use Width/Clear",
+                        8, 8, 0xFFFFFF);
+            }
         });
     }
 
