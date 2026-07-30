@@ -46,13 +46,14 @@ public final class PrecisionPropertiesScreen extends Screen {
             ClientPlayNetworking.send(MetroBuilderNetworking.APPLY_PSD_PROPERTIES,buf); close();
         } catch(NumberFormatException ignored) {}
     }
-    @Override public void render(DrawContext c,int mouseX,int mouseY,float delta){
-        renderBackground(c); int cx=width/2, top=height/2-105;
-        c.fill(cx-105,top-18,cx+105,top+190,0xE0101010);
-        c.drawCenteredTextWithShadow(textRenderer,title,cx,top-8,0xFFFFFF);
-        c.drawTextWithShadow(textRenderer,"X",cx-103,top+41,0xBFBFBF); c.drawTextWithShadow(textRenderer,"Y",cx-103,top+68,0xBFBFBF);
-        c.drawTextWithShadow(textRenderer,"Z",cx-103,top+95,0xBFBFBF); c.drawTextWithShadow(textRenderer,"Yaw",cx-103,top+122,0xBFBFBF);
-        super.render(c,mouseX,mouseY,delta);
-    }
+@Override
+public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    renderBackground(context, mouseX, mouseY, delta);
+
+    int cx = width / 2;
+    int top = height / 2 - 105;
+
+    super.render(context, mouseX, mouseY, delta);
+}
     @Override public boolean shouldPause(){ return false; }
 }
