@@ -16,6 +16,7 @@ public final class MetroBuilderItems {
     public static final Item METROBUILDER_LOGO = registerItem("metrobuilder_logo", new Item(new Item.Settings()));
     public static final Item BUILDER_WAND = registerItem("builder_wand", new BuilderWandItem(new Item.Settings()));
     public static final Item PLATFORM_BUILDER = registerItem("platform_builder", new PlatformBuilderItem(new Item.Settings()));
+    public static final Item PRECISION_PSD_BUILDER = registerItem("precision_psd_builder", new PrecisionPSDBuilderItem(new Item.Settings()));
 
     public static final RegistryKey<ItemGroup> METROBUILDER_GROUP_KEY = RegistryKey.of(
             RegistryKeys.ITEM_GROUP, new Identifier(MetroBuilder.MOD_ID, "main"));
@@ -26,6 +27,7 @@ public final class MetroBuilderItems {
             .entries((displayContext, entries) -> {
                 entries.add(BUILDER_WAND);
                 entries.add(PLATFORM_BUILDER);
+                entries.add(PRECISION_PSD_BUILDER);
             }).build();
 
     private static Item registerItem(String name, Item item) {

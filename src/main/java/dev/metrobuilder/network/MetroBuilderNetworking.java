@@ -2,6 +2,7 @@ package dev.metrobuilder.network;
 
 import dev.metrobuilder.MetroBuilder;
 import dev.metrobuilder.display.DisplayManager;
+import dev.metrobuilder.display.PrecisionPSDManager;
 import dev.metrobuilder.item.BuilderWandItem;
 import dev.metrobuilder.item.MetroBuilderItems;
 import dev.metrobuilder.platform.PlatformDesignManager;
@@ -16,6 +17,7 @@ public final class MetroBuilderNetworking {
     public static final Identifier ROTATE_WAND = new Identifier(MetroBuilder.MOD_ID, "rotate_wand");
     public static final Identifier OPEN_PLATFORM_BUILDER = new Identifier(MetroBuilder.MOD_ID, "open_platform_builder");
     public static final Identifier SAVE_PLATFORM_DESIGN = new Identifier(MetroBuilder.MOD_ID, "save_platform_design");
+    public static final Identifier PSD_CONTROL = new Identifier(MetroBuilder.MOD_ID, "psd_control");
 
     private MetroBuilderNetworking() {}
 
@@ -42,6 +44,27 @@ public final class MetroBuilderNetworking {
             server.execute(() -> {
                 PlatformDesignManager.get(player).setRows(rows);
                 player.sendMessage(net.minecraft.text.Text.literal("Platform Builder design saved for this world session"), true);
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(PSD_CONTROL, (server, player, handler, buf, responseSender) -> {
+            String action = buf.readString(32);
+            boolean fine = buf.readBoolean();
+            server.execute(() -> {
+                if (!player.getMainHandStack().isOf(MetroBuilderItems.PRECISION_PSD_BUILDER)) return;
+                double step = fine ? 0.001 : 0.01;
+                switch (action) {
+                    case "rotate_left" -> PrecisionPSDManager.rotate(player, fine ? -0.25f : -1.0f);
+                    case "rotate_right" -> PrecisionPSDManager.rotate(player, fine ? 0.25f : 1.0f);
+                    case "left" -> PrecisionPSDManager.nudge(player, -step, 0, 0);
+                    case "right" -> PrecisionPSDManager.nudge(player, step, 0, 0);
+                    case "forward" -> PrecisionPSDManager.nudge(player, 0, 0, -step);
+                    case "back" -> PrecisionPSDManager.nudge(player, 0, 0, step);
+                    case "up" -> PrecisionPSDManager.nudge(player, 0, step, 0);
+                    case "down" -> PrecisionPSDManager.nudge(player, 0, -step, 0);
+                    case "toggle" -> PrecisionPSDManager.toggleType(player);
+                    case "cancel" -> PrecisionPSDManager.cancel(player);
+                }
             });
         });
     }

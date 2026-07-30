@@ -5,5 +5,14 @@
   "item.metrobuilder.metrobuilder_logo": "MetroBuilder",
   "key.metrobuilder.rotate_left": "Rotate Builder Wand Left",
   "key.metrobuilder.rotate_right": "Rotate Builder Wand Right",
-  "key.category.metrobuilder": "MetroBuilder"
+  "key.category.metrobuilder": "MetroBuilder",
+  "item.metrobuilder.precision_psd_builder": "Precision PSD Builder",
+  "key.metrobuilder.psd_toggle": "Toggle PSD Door / Glass",
+  "key.metrobuilder.psd_cancel": "Cancel PSD Preview",
+  "key.metrobuilder.psd_forward": "Nudge PSD Forward",
+  "key.metrobuilder.psd_back": "Nudge PSD Back",
+  "key.metrobuilder.psd_left": "Nudge PSD Left",
+  "key.metrobuilder.psd_right": "Nudge PSD Right",
+  "key.metrobuilder.psd_up": "Nudge PSD Up",
+  "key.metrobuilder.psd_down": "Nudge PSD Down"
 }

@@ -20,11 +20,20 @@ import java.util.List;
 public final class MetroBuilderClient implements ClientModInitializer {
     private static KeyBinding rotateRight;
     private static KeyBinding rotateLeft;
+    private static KeyBinding psdToggle, psdCancel, psdForward, psdBack, psdLeft, psdRight, psdUp, psdDown;
 
     @Override
     public void onInitializeClient() {
         rotateRight = register("rotate_right", GLFW.GLFW_KEY_RIGHT_BRACKET);
         rotateLeft = register("rotate_left", GLFW.GLFW_KEY_LEFT_BRACKET);
+        psdToggle = register("psd_toggle", GLFW.GLFW_KEY_G);
+        psdCancel = register("psd_cancel", GLFW.GLFW_KEY_X);
+        psdForward = register("psd_forward", GLFW.GLFW_KEY_UP);
+        psdBack = register("psd_back", GLFW.GLFW_KEY_DOWN);
+        psdLeft = register("psd_left", GLFW.GLFW_KEY_LEFT);
+        psdRight = register("psd_right", GLFW.GLFW_KEY_RIGHT);
+        psdUp = register("psd_up", GLFW.GLFW_KEY_PAGE_UP);
+        psdDown = register("psd_down", GLFW.GLFW_KEY_PAGE_DOWN);
 
         ClientPlayNetworking.registerGlobalReceiver(MetroBuilderNetworking.OPEN_PLATFORM_BUILDER,
                 (client, handler, buf, responseSender) -> {
@@ -35,8 +44,22 @@ public final class MetroBuilderClient implements ClientModInitializer {
                 });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (rotateRight.wasPressed()) sendRotation(client, 1);
-            while (rotateLeft.wasPressed()) sendRotation(client, -1);
+            while (rotateRight.wasPressed()) {
+                if (client.player != null && client.player.getMainHandStack().isOf(MetroBuilderItems.PRECISION_PSD_BUILDER)) sendPsd(client, "rotate_right");
+                else sendRotation(client, 1);
+            }
+            while (rotateLeft.wasPressed()) {
+                if (client.player != null && client.player.getMainHandStack().isOf(MetroBuilderItems.PRECISION_PSD_BUILDER)) sendPsd(client, "rotate_left");
+                else sendRotation(client, -1);
+            }
+            while (psdToggle.wasPressed()) sendPsd(client, "toggle");
+            while (psdCancel.wasPressed()) sendPsd(client, "cancel");
+            while (psdForward.wasPressed()) sendPsd(client, "forward");
+            while (psdBack.wasPressed()) sendPsd(client, "back");
+            while (psdLeft.wasPressed()) sendPsd(client, "left");
+            while (psdRight.wasPressed()) sendPsd(client, "right");
+            while (psdUp.wasPressed()) sendPsd(client, "up");
+            while (psdDown.wasPressed()) sendPsd(client, "down");
         });
 
         HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
@@ -50,6 +73,10 @@ public final class MetroBuilderClient implements ClientModInitializer {
                 drawContext.drawTextWithShadow(client.textRenderer,
                         "Platform Builder  |  Right-click Air: Menu  |  Left-click Block: Pos 1  |  Right-click Block: Pos 2",
                         8, 8, 0xFFFFFF);
+            } else if (client.player.getMainHandStack().isOf(MetroBuilderItems.PRECISION_PSD_BUILDER)) {
+                drawContext.drawTextWithShadow(client.textRenderer,
+                        "Precision PSD Builder | Right-click: Preview/Place | [ ] Rotate | Arrows/PageUp/PageDown Nudge | G Toggle | X Cancel | Shift Fine",
+                        8, 8, 0xFFFFFF);
             }
         });
     }
@@ -57,6 +84,14 @@ public final class MetroBuilderClient implements ClientModInitializer {
     private static KeyBinding register(String name, int key) {
         return KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.metrobuilder." + name, InputUtil.Type.KEYSYM, key, "key.category.metrobuilder"));
+    }
+
+    private static void sendPsd(MinecraftClient client, String action) {
+        if (client.player == null || !client.player.getMainHandStack().isOf(MetroBuilderItems.PRECISION_PSD_BUILDER)) return;
+        PacketByteBuf buf = new PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+        buf.writeString(action);
+        buf.writeBoolean(client.options.sneakKey.isPressed());
+        ClientPlayNetworking.send(MetroBuilderNetworking.PSD_CONTROL, buf);
     }
 
     private static void sendRotation(MinecraftClient client, int direction) {
