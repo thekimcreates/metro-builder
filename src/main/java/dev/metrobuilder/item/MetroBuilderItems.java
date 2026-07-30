@@ -15,7 +15,7 @@ import net.minecraft.util.Identifier;
 public final class MetroBuilderItems {
     public static final Item METROBUILDER_LOGO = registerItem("metrobuilder_logo", new Item(new Item.Settings()));
     public static final Item BUILDER_WAND = registerItem("builder_wand", new BuilderWandItem(new Item.Settings()));
-    public static final Item PLATFORM_GENERATOR = registerItem("platform_generator", new PlatformGeneratorItem(new Item.Settings()));
+    public static final Item PLATFORM_BUILDER = registerItem("platform_builder", new PlatformBuilderItem(new Item.Settings()));
 
     public static final RegistryKey<ItemGroup> METROBUILDER_GROUP_KEY = RegistryKey.of(
             RegistryKeys.ITEM_GROUP, new Identifier(MetroBuilder.MOD_ID, "main"));
@@ -25,7 +25,7 @@ public final class MetroBuilderItems {
             .displayName(Text.translatable("itemGroup.metrobuilder.main"))
             .entries((displayContext, entries) -> {
                 entries.add(BUILDER_WAND);
-                entries.add(PLATFORM_GENERATOR);
+                entries.add(PLATFORM_BUILDER);
             }).build();
 
     private static Item registerItem(String name, Item item) {

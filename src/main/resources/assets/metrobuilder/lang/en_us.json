@@ -1,7 +1,7 @@
 {
   "itemGroup.metrobuilder.main": "MetroBuilder",
   "item.metrobuilder.builder_wand": "Builder Wand",
-  "item.metrobuilder.platform_generator": "Platform Generator",
+  "item.metrobuilder.platform_builder": "Platform Builder",
   "item.metrobuilder.metrobuilder_logo": "MetroBuilder",
   "key.metrobuilder.rotate_left": "Rotate Builder Wand Left",
   "key.metrobuilder.rotate_right": "Rotate Builder Wand Right",
