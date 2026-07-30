@@ -1,17 +1,22 @@
 package dev.metrobuilder.display;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtHelper;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.state.property.Property;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,11 +34,15 @@ public final class PrecisionPSDManager {
 
     public static void startOrConfirm(ServerPlayerEntity player, Vec3d position) {
         Session session = get(player);
-        if (session.preview != null && !session.preview.isRemoved()) {
-            session.preview.removeCommandTag("metrobuilder.psd_preview");
-            session.preview.addCommandTag("metrobuilder.precision_psd");
-            session.preview.setGlowing(false);
-            session.preview = null;
+        if (session.hasPreview()) {
+            for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
+                if (!entity.isRemoved()) {
+                    entity.removeCommandTag("metrobuilder.psd_preview");
+                    entity.addCommandTag("metrobuilder.precision_psd");
+                    entity.setGlowing(false);
+                }
+            }
+            session.previewParts.clear();
             player.sendMessage(Text.literal("Precision PSD placed"), true);
             return;
         }
@@ -45,9 +54,27 @@ public final class PrecisionPSDManager {
         }
 
         Block block = Registries.BLOCK.get(id);
+        if (session.blockId.equals(GLASS_ID)) {
+            // MTR PSD glass is a multi-block model. A single default block state only
+            // renders one small connected-model fragment. Render the complete standalone
+            // lower and upper states as one movable preview/placement.
+            BlockState lower = withStringProperty(withStringProperty(block.getDefaultState(), "side", "single"), "half", "lower");
+            BlockState upper = withStringProperty(withStringProperty(block.getDefaultState(), "side", "single"), "half", "upper");
+            spawnPart(player, session, lower, position);
+            spawnPart(player, session, upper, position.add(0, 1, 0));
+        } else {
+            spawnPart(player, session, block.getDefaultState(), position);
+        }
+
+        if (session.hasPreview()) {
+            player.sendMessage(Text.literal("Preview: " + displayName(session.blockId) + " | right-click again to place"), true);
+        }
+    }
+
+    private static void spawnPart(ServerPlayerEntity player, Session session, BlockState state, Vec3d position) {
         DisplayEntity.BlockDisplayEntity entity = new DisplayEntity.BlockDisplayEntity(EntityType.BLOCK_DISPLAY, player.getServerWorld());
         NbtCompound nbt = new NbtCompound();
-        nbt.put("block_state", NbtHelper.fromBlockState(block.getDefaultState()));
+        nbt.put("block_state", NbtHelper.fromBlockState(state));
         entity.readNbt(nbt);
         entity.setPosition(position.x, position.y, position.z);
         entity.setYaw(session.yaw);
@@ -55,44 +82,60 @@ public final class PrecisionPSDManager {
         entity.addCommandTag("metrobuilder.psd_preview");
         entity.addCommandTag("metrobuilder.precision_psd");
         if (player.getServerWorld().spawnEntity(entity)) {
-            session.preview = entity;
-            player.sendMessage(Text.literal("Preview: " + displayName(session.blockId) + " | right-click again to place"), true);
+            session.previewParts.add(entity);
         }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static BlockState withStringProperty(BlockState state, String propertyName, String valueName) {
+        for (Property property : state.getProperties()) {
+            if (!property.getName().equals(propertyName)) continue;
+            Optional value = property.parse(valueName);
+            if (value.isPresent()) return state.with(property, (Comparable) value.get());
+        }
+        return state;
     }
 
     public static void rotate(ServerPlayerEntity player, float delta) {
         Session session = get(player);
         session.yaw = normalize(session.yaw + delta);
-        if (session.preview != null && !session.preview.isRemoved()) session.preview.setYaw(session.yaw);
+        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
+            if (!entity.isRemoved()) entity.setYaw(session.yaw);
+        }
         player.sendMessage(Text.literal(String.format("PSD rotation: %.2f°", session.yaw)), true);
     }
 
     public static void nudge(ServerPlayerEntity player, double localX, double y, double localZ) {
         Session session = get(player);
-        if (session.preview == null || session.preview.isRemoved()) return;
+        if (!session.hasPreview()) return;
         double radians = Math.toRadians(session.yaw);
         double dx = localX * Math.cos(radians) - localZ * Math.sin(radians);
         double dz = localX * Math.sin(radians) + localZ * Math.cos(radians);
-        session.preview.setPosition(session.preview.getX() + dx, session.preview.getY() + y, session.preview.getZ() + dz);
+        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
+            if (!entity.isRemoved()) entity.setPosition(entity.getX() + dx, entity.getY() + y, entity.getZ() + dz);
+        }
     }
 
     public static void toggleType(ServerPlayerEntity player) {
         Session session = get(player);
+        Vec3d pos = session.basePosition();
+        discardPreview(session);
         session.blockId = session.blockId.equals(DOOR_ID) ? GLASS_ID : DOOR_ID;
         player.sendMessage(Text.literal("PSD type: " + displayName(session.blockId)), true);
-        if (session.preview != null && !session.preview.isRemoved()) {
-            Vec3d pos = session.preview.getPos();
-            session.preview.discard();
-            session.preview = null;
-            startOrConfirm(player, pos);
-        }
+        if (pos != null) startOrConfirm(player, pos);
     }
 
     public static void cancel(ServerPlayerEntity player) {
         Session session = get(player);
-        if (session.preview != null && !session.preview.isRemoved()) session.preview.discard();
-        session.preview = null;
+        discardPreview(session);
         player.sendMessage(Text.literal("Precision PSD preview cancelled"), true);
+    }
+
+    private static void discardPreview(Session session) {
+        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
+            if (!entity.isRemoved()) entity.discard();
+        }
+        session.previewParts.clear();
     }
 
     public static void remove(ServerPlayerEntity player) {
@@ -112,6 +155,15 @@ public final class PrecisionPSDManager {
     public static final class Session {
         private String blockId = DOOR_ID;
         private float yaw;
-        private DisplayEntity.BlockDisplayEntity preview;
+        private final List<DisplayEntity.BlockDisplayEntity> previewParts = new ArrayList<>();
+
+        private boolean hasPreview() {
+            previewParts.removeIf(entity -> entity == null || entity.isRemoved());
+            return !previewParts.isEmpty();
+        }
+
+        private Vec3d basePosition() {
+            return hasPreview() ? previewParts.get(0).getPos() : null;
+        }
     }
 }
