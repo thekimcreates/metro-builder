@@ -6,6 +6,8 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.entity.mob.ShulkerEntity;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtHelper;
 import net.minecraft.registry.Registries;
@@ -98,7 +100,8 @@ public final class PrecisionPSDManager {
 
             Identifier topId = Identifier.tryParse(TOP_ID);
             if (topId != null && Registries.BLOCK.containsId(topId)) {
-                spawnPart(player, session, Registries.BLOCK.get(topId).getDefaultState(), position.add(0, 2, 0));
+                BlockState top = withStringProperty(withStringProperty(Registries.BLOCK.get(topId).getDefaultState(), "air_left", "false"), "air_right", "false");
+                spawnPart(player, session, top, position.add(0, 2, 0));
             } else {
                 player.sendMessage(Text.literal("Warning: required block is unavailable: " + TOP_ID), false);
             }
@@ -148,6 +151,7 @@ public final class PrecisionPSDManager {
             ShulkerEntity collision = new ShulkerEntity(EntityType.SHULKER, player.getServerWorld());
             collision.setPosition(base.x + 0.5, base.y + i, base.z + 0.5);
             collision.setInvisible(true);
+            collision.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, Integer.MAX_VALUE, 0, false, false, false));
             collision.setInvulnerable(true);
             collision.setSilent(true);
             collision.setNoGravity(true);
@@ -156,7 +160,10 @@ public final class PrecisionPSDManager {
             collision.addCommandTag(COLLISION_TAG);
             collision.addCommandTag(PLACED_TAG);
             collision.addCommandTag(session.groupTag);
-            if (player.getServerWorld().spawnEntity(collision)) session.collisionParts.add(collision);
+            if (player.getServerWorld().spawnEntity(collision)) {
+                collision.setInvisible(true);
+                session.collisionParts.add(collision);
+            }
         }
     }
 
@@ -245,6 +252,36 @@ public final class PrecisionPSDManager {
         for (String tag : entity.getCommandTags()) if (tag.startsWith(GROUP_PREFIX)) return tag;
         return null;
     }
+
+    public static PropertiesSnapshot getProperties(ServerPlayerEntity player) {
+        Session session = get(player);
+        if (!session.hasPreview()) return null;
+        DisplayEntity.BlockDisplayEntity root = session.previewParts.get(0);
+        return new PropertiesSnapshot(root.getX(), root.getY(), root.getZ(), session.yaw, session.blockId);
+    }
+
+    public static void applyProperties(ServerPlayerEntity player, double x, double y, double z, float yaw, String blockId) {
+        Session session = get(player);
+        if (!session.hasPreview()) return;
+        DisplayEntity.BlockDisplayEntity root = session.previewParts.get(0);
+        double dx = x - root.getX();
+        double dy = y - root.getY();
+        double dz = z - root.getZ();
+        session.yaw = normalize(yaw);
+        if (DOOR_ID.equals(blockId) || GLASS_ID.equals(blockId)) session.blockId = blockId;
+        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
+            if (!entity.isRemoved()) {
+                entity.setPosition(entity.getX() + dx, entity.getY() + dy, entity.getZ() + dz);
+                entity.setYaw(session.yaw);
+            }
+        }
+        for (ShulkerEntity entity : session.collisionParts) {
+            if (!entity.isRemoved()) entity.setPosition(entity.getX() + dx, entity.getY() + dy, entity.getZ() + dz);
+        }
+        player.sendMessage(Text.literal("Precision PSD properties applied"), true);
+    }
+
+    public record PropertiesSnapshot(double x, double y, double z, float yaw, String blockId) {}
 
     public static void remove(ServerPlayerEntity player) {
         cancel(player);

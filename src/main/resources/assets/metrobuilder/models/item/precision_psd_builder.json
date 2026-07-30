@@ -1,4 +1,1 @@
-{
-  "parent": "minecraft:item/handheld",
-  "textures": { "layer0": "metrobuilder:item/precision_psd_builder" }
-}
+{"parent":"minecraft:item/handheld","textures":{"layer0":"metrobuilder:item/builder_wand"}}

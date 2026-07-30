@@ -7,12 +7,13 @@
   "key.metrobuilder.rotate_right": "Rotate Builder Wand Right",
   "key.category.metrobuilder": "MetroBuilder",
   "item.metrobuilder.precision_psd_builder": "Precision PSD Builder",
-  "key.metrobuilder.psd_toggle": "Toggle PSD Door / Glass",
-  "key.metrobuilder.psd_cancel": "Cancel PSD Preview",
-  "key.metrobuilder.psd_forward": "Nudge PSD Forward",
-  "key.metrobuilder.psd_back": "Nudge PSD Back",
-  "key.metrobuilder.psd_left": "Nudge PSD Left",
-  "key.metrobuilder.psd_right": "Nudge PSD Right",
-  "key.metrobuilder.psd_up": "Nudge PSD Up",
-  "key.metrobuilder.psd_down": "Nudge PSD Down"
+  "key.metrobuilder.move_left": "Move PSD Left",
+  "key.metrobuilder.move_right": "Move PSD Right",
+  "key.metrobuilder.move_forward": "Move PSD Forward",
+  "key.metrobuilder.move_back": "Move PSD Back",
+  "key.metrobuilder.move_up": "Move PSD Up",
+  "key.metrobuilder.move_down": "Move PSD Down",
+  "key.metrobuilder.cycle_psd_type": "Cycle PSD Type",
+  "key.metrobuilder.cancel_psd": "Cancel PSD Edit",
+  "key.metrobuilder.psd_properties": "Open PSD Properties"
 }

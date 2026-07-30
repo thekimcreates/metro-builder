@@ -17,7 +17,10 @@ public final class MetroBuilderNetworking {
     public static final Identifier ROTATE_WAND = new Identifier(MetroBuilder.MOD_ID, "rotate_wand");
     public static final Identifier OPEN_PLATFORM_BUILDER = new Identifier(MetroBuilder.MOD_ID, "open_platform_builder");
     public static final Identifier SAVE_PLATFORM_DESIGN = new Identifier(MetroBuilder.MOD_ID, "save_platform_design");
-    public static final Identifier PSD_CONTROL = new Identifier(MetroBuilder.MOD_ID, "psd_control");
+    public static final Identifier PRECISION_PSD_ACTION = new Identifier(MetroBuilder.MOD_ID, "precision_psd_action");
+    public static final Identifier OPEN_PSD_PROPERTIES = new Identifier(MetroBuilder.MOD_ID, "open_psd_properties");
+    public static final Identifier SHOW_PSD_PROPERTIES = new Identifier(MetroBuilder.MOD_ID, "show_psd_properties");
+    public static final Identifier APPLY_PSD_PROPERTIES = new Identifier(MetroBuilder.MOD_ID, "apply_psd_properties");
 
     private MetroBuilderNetworking() {}
 
@@ -47,25 +50,37 @@ public final class MetroBuilderNetworking {
             });
         });
 
-        ServerPlayNetworking.registerGlobalReceiver(PSD_CONTROL, (server, player, handler, buf, responseSender) -> {
+        ServerPlayNetworking.registerGlobalReceiver(PRECISION_PSD_ACTION, (server, player, handler, buf, responseSender) -> {
             String action = buf.readString(32);
-            boolean fine = buf.readBoolean();
+            double amount = buf.readDouble();
             server.execute(() -> {
                 if (!player.getMainHandStack().isOf(MetroBuilderItems.PRECISION_PSD_BUILDER)) return;
-                double step = fine ? 0.001 : 0.01;
                 switch (action) {
-                    case "rotate_left" -> PrecisionPSDManager.rotate(player, fine ? -0.25f : -1.0f);
-                    case "rotate_right" -> PrecisionPSDManager.rotate(player, fine ? 0.25f : 1.0f);
-                    case "left" -> PrecisionPSDManager.nudge(player, -step, 0, 0);
-                    case "right" -> PrecisionPSDManager.nudge(player, step, 0, 0);
-                    case "forward" -> PrecisionPSDManager.nudge(player, 0, 0, -step);
-                    case "back" -> PrecisionPSDManager.nudge(player, 0, 0, step);
-                    case "up" -> PrecisionPSDManager.nudge(player, 0, step, 0);
-                    case "down" -> PrecisionPSDManager.nudge(player, 0, -step, 0);
-                    case "toggle" -> PrecisionPSDManager.toggleType(player);
+                    case "rotate" -> PrecisionPSDManager.rotate(player, (float) amount);
+                    case "x" -> PrecisionPSDManager.nudge(player, amount, 0, 0);
+                    case "z" -> PrecisionPSDManager.nudge(player, 0, 0, amount);
+                    case "y" -> PrecisionPSDManager.nudge(player, 0, amount, 0);
+                    case "type" -> PrecisionPSDManager.toggleType(player);
                     case "cancel" -> PrecisionPSDManager.cancel(player);
                 }
             });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(OPEN_PSD_PROPERTIES, (server, player, handler, buf, responseSender) -> server.execute(() -> {
+            PrecisionPSDManager.PropertiesSnapshot snapshot = PrecisionPSDManager.getProperties(player);
+            if (snapshot == null) {
+                player.sendMessage(net.minecraft.text.Text.literal("Select or preview a PSD first"), true);
+                return;
+            }
+            net.minecraft.network.PacketByteBuf out = new net.minecraft.network.PacketByteBuf(io.netty.buffer.Unpooled.buffer());
+            out.writeDouble(snapshot.x()); out.writeDouble(snapshot.y()); out.writeDouble(snapshot.z());
+            out.writeFloat(snapshot.yaw()); out.writeString(snapshot.blockId());
+            ServerPlayNetworking.send(player, SHOW_PSD_PROPERTIES, out);
+        }));
+
+        ServerPlayNetworking.registerGlobalReceiver(APPLY_PSD_PROPERTIES, (server, player, handler, buf, responseSender) -> {
+            double x=buf.readDouble(), y=buf.readDouble(), z=buf.readDouble(); float yaw=buf.readFloat(); String blockId=buf.readString(128);
+            server.execute(() -> PrecisionPSDManager.applyProperties(player,x,y,z,yaw,blockId));
         });
     }
 }
