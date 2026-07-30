@@ -1,19 +1,15 @@
-MetroBuilder Alpha 5 - Precision PSD Builder
+MetroBuilder Precision PSD Builder update
 
-Copy these files into the project, preserving paths.
+Replace these files:
+- src/main/java/dev/metrobuilder/display/PrecisionPSDManager.java
+- src/main/java/dev/metrobuilder/item/PrecisionPSDBuilderItem.java
 
-Controls:
-- Right-click: create preview; right-click again: confirm placement
-- [ and ]: rotate 1 degree
-- Hold Shift with controls: 0.25 degree rotation / 0.001 block movement
-- Arrow keys: nudge horizontally
-- Page Up / Page Down: nudge vertically
-- G: toggle Tianjin BMT PSD door / MTR PSD glass
-- X: cancel preview
+Changes:
+- mtr:psd_top is rendered above each mtr:psd_glass assembly.
+- Right-click an already placed PSD/display while looking at it to select the entire grouped assembly.
+- Selected assemblies glow and can be rotated/nudged with the existing controls.
+- Right-click again saves the edited assembly.
+- Invisible, invulnerable shulker collision columns prevent players from walking through placed assemblies.
 
-Required mods at runtime:
-- MTR 4.0.5+ for mtr:psd_glass
-- Tianjin Metro 1.1.1+ for tjmetro:psd_door_tianjin_bmt
-
-Technical note:
-This first implementation uses Minecraft Block Display entities to support arbitrary yaw and sub-block positioning. It renders the registered block state. The Tianjin door's custom block-entity animation may not appear because the original renderer expects a real TJMetro block entity; this update is the placement/rendering foundation for the compatibility renderer.
+Collision note:
+Minecraft entity collision boxes remain axis-aligned. The invisible collision column follows position but cannot itself rotate to an arbitrary angle. It provides a solid practical barrier, but at steep custom angles its physical outline will be an approximation.
