@@ -4,6 +4,7 @@ import dev.thekimcreates.metrobuilder.command.MetroBuilderCommands;
 import dev.thekimcreates.metrobuilder.item.MetroBuilderItemGroups;
 import dev.thekimcreates.metrobuilder.item.MetroBuilderItems;
 import dev.thekimcreates.metrobuilder.precision.PrecisionEngine;
+import dev.thekimcreates.metrobuilder.psd.PSDTypes;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
@@ -23,9 +24,12 @@ public final class MetroBuilder implements ModInitializer {
     public void onInitialize() {
         MetroBuilderItems.initialize();
         MetroBuilderItemGroups.initialize();
-        PrecisionEngine.initialize();
-        MetroBuilderCommands.initialize();
 
+        // Concrete types must be registered before any world precision save is decoded.
+        PSDTypes.initialize();
+        PrecisionEngine.initialize();
+
+        MetroBuilderCommands.initialize();
         LOGGER.info("MetroBuilder {} initialized", VERSION);
     }
 
