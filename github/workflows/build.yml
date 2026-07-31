@@ -1,0 +1,66 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+      - name: Verify Fabric entrypoints
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          javap -classpath build/classes/java/main -p \
+            dev.thekimcreates.metrobuilder.MetroBuilder \
+            | grep -F 'public dev.thekimcreates.metrobuilder.MetroBuilder();'
+
+          javap -classpath build/classes/java/main -p \
+            dev.thekimcreates.metrobuilder.client.MetroBuilderClient \
+            | grep -F 'public dev.thekimcreates.metrobuilder.client.MetroBuilderClient();'
+
+          JAR_PATH="$(find build/libs -maxdepth 1 -type f -name 'metrobuilder-*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -n "$JAR_PATH"
+
+          jar tf "$JAR_PATH" | grep -F 'dev/thekimcreates/metrobuilder/MetroBuilder.class'
+          jar tf "$JAR_PATH" | grep -F 'dev/thekimcreates/metrobuilder/client/MetroBuilderClient.class'
+
+          unzip -p "$JAR_PATH" fabric.mod.json \
+            | grep -F 'dev.thekimcreates.metrobuilder.MetroBuilder'
+          unzip -p "$JAR_PATH" fabric.mod.json \
+            | grep -F 'dev.thekimcreates.metrobuilder.client.MetroBuilderClient'
+
+          if unzip -p "$JAR_PATH" fabric.mod.json | grep -Fq '{MINECRAFT_USERNAME}'; then
+            echo 'Unresolved placeholder found in fabric.mod.json.' >&2
+            exit 1
+          fi
+
+      - name: Upload mod JARs
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrobuilder-${{ github.sha }}
+          path: build/libs/*.jar

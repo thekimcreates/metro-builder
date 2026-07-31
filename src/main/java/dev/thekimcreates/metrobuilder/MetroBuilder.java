@@ -11,15 +11,16 @@ import org.slf4j.LoggerFactory;
 /**
  * Common MetroBuilder entry point.
  *
- * <p>Beta 1 is intentionally independent of MTR and TJMetro code. Their resources and
- * train hooks will be integrated only when the PSD engine is ready.</p>
+ * <p>Fabric creates this class through its default language adapter, so the
+ * no-argument constructor must be public.</p>
  */
 public final class MetroBuilder implements ModInitializer {
     public static final String MOD_ID = "metrobuilder";
     public static final String VERSION = "1.0.0-beta.1";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    private MetroBuilder() {
+    /** Public constructor required by Fabric Loader. */
+    public MetroBuilder() {
     }
 
     @Override
