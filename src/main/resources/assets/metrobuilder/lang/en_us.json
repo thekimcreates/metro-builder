@@ -1,5 +1,8 @@
 {
   "itemGroup.metrobuilder.main": "MetroBuilder",
   "item.metrobuilder.builder_wand": "Builder Wand",
-  "item.metrobuilder.builder_wand.tooltip": "Precision PSD editing tool"
+  "item.metrobuilder.builder_wand.tooltip": "Precision PSD editing tool",
+  "item.metrobuilder.builder_wand.tooltip.place": "Right-click to place a precision PSD",
+  "message.metrobuilder.creative_only": "MetroBuilder tools require Creative Mode",
+  "message.metrobuilder.psd_placed": "PSD placed at %s, %s, %s | yaw %s°"
 }
