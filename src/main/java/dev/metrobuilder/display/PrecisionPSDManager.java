@@ -5,9 +5,6 @@ import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.DisplayEntity;
-import net.minecraft.entity.mob.ShulkerEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtHelper;
 import net.minecraft.registry.Registries;
@@ -33,7 +30,6 @@ public final class PrecisionPSDManager {
 
     private static final String PLACED_TAG = "metrobuilder.precision_psd";
     private static final String PREVIEW_TAG = "metrobuilder.psd_preview";
-    private static final String COLLISION_TAG = "metrobuilder.psd_collision";
     private static final String GROUP_PREFIX = "metrobuilder.psd_group.";
     private static final Map<UUID, Session> SESSIONS = new ConcurrentHashMap<>();
 
@@ -62,8 +58,6 @@ public final class PrecisionPSDManager {
                 display.setGlowing(true);
                 display.addCommandTag(PREVIEW_TAG);
                 session.previewParts.add(display);
-            } else if (entity instanceof ShulkerEntity shulker) {
-                session.collisionParts.add(shulker);
             }
         }
 
@@ -95,21 +89,29 @@ public final class PrecisionPSDManager {
         if (session.blockId.equals(GLASS_ID)) {
             BlockState lower = withStringProperty(withStringProperty(block.getDefaultState(), "side", "single"), "half", "lower");
             BlockState upper = withStringProperty(withStringProperty(block.getDefaultState(), "side", "single"), "half", "upper");
-            spawnPart(player, session, lower, position);
-            spawnPart(player, session, upper, position.add(0, 1, 0));
 
             Identifier topId = Identifier.tryParse(TOP_ID);
+            BlockState top = null;
             if (topId != null && Registries.BLOCK.containsId(topId)) {
-                BlockState top = withStringProperty(withStringProperty(Registries.BLOCK.get(topId).getDefaultState(), "air_left", "false"), "air_right", "false");
-                spawnPart(player, session, top, position.add(0, 2, 0));
+                top = withStringProperty(
+                        withStringProperty(Registries.BLOCK.get(topId).getDefaultState(), "air_left", "false"),
+                        "air_right", "false"
+                );
             } else {
                 player.sendMessage(Text.literal("Warning: required block is unavailable: " + TOP_ID), false);
+            }
+
+            // One glass placement is a connected three-panel assembly. Every part shares
+            // the same group tag and is transformed as one object when moved or rotated.
+            for (int panel = 0; panel < 3; panel++) {
+                Vec3d panelBase = localOffset(position, session.yaw, panel, 0);
+                spawnPart(player, session, lower, panelBase);
+                spawnPart(player, session, upper, panelBase.add(0, 1, 0));
+                if (top != null) spawnPart(player, session, top, panelBase.add(0, 2, 0));
             }
         } else {
             spawnPart(player, session, block.getDefaultState(), position);
         }
-
-        spawnCollisionColumn(player, session, position);
 
         if (session.hasPreview()) {
             player.sendMessage(Text.literal("Preview: " + displayName(session.blockId) + " | right-click again to place"), true);
@@ -125,7 +127,6 @@ public final class PrecisionPSDManager {
             }
         }
         session.previewParts.clear();
-        session.collisionParts.clear();
         session.groupTag = null;
         player.sendMessage(Text.literal("Precision PSD placed"), true);
     }
@@ -146,25 +147,11 @@ public final class PrecisionPSDManager {
         if (player.getServerWorld().spawnEntity(entity)) session.previewParts.add(entity);
     }
 
-    private static void spawnCollisionColumn(ServerPlayerEntity player, Session session, Vec3d base) {
-        for (int i = 0; i < 3; i++) {
-            ShulkerEntity collision = new ShulkerEntity(EntityType.SHULKER, player.getServerWorld());
-            collision.setPosition(base.x + 0.5, base.y + i, base.z + 0.5);
-            collision.setInvisible(true);
-            collision.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, Integer.MAX_VALUE, 0, false, false, false));
-            collision.setInvulnerable(true);
-            collision.setSilent(true);
-            collision.setNoGravity(true);
-            collision.setAiDisabled(true);
-            collision.setPersistent();
-            collision.addCommandTag(COLLISION_TAG);
-            collision.addCommandTag(PLACED_TAG);
-            collision.addCommandTag(session.groupTag);
-            if (player.getServerWorld().spawnEntity(collision)) {
-                collision.setInvisible(true);
-                session.collisionParts.add(collision);
-            }
-        }
+    private static Vec3d localOffset(Vec3d origin, float yaw, double localX, double localZ) {
+        double radians = Math.toRadians(yaw);
+        double dx = localX * Math.cos(radians) - localZ * Math.sin(radians);
+        double dz = localX * Math.sin(radians) + localZ * Math.cos(radians);
+        return origin.add(dx, 0, dz);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -179,9 +166,26 @@ public final class PrecisionPSDManager {
 
     public static void rotate(ServerPlayerEntity player, float delta) {
         Session session = get(player);
+        if (!session.hasPreview()) return;
+
+        DisplayEntity.BlockDisplayEntity root = session.previewParts.get(0);
+        double pivotX = root.getX();
+        double pivotZ = root.getZ();
+        double radians = Math.toRadians(delta);
+        double cos = Math.cos(radians);
+        double sin = Math.sin(radians);
+
         session.yaw = normalize(session.yaw + delta);
         for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
-            if (!entity.isRemoved()) entity.setYaw(session.yaw);
+            if (entity.isRemoved()) continue;
+            double relativeX = entity.getX() - pivotX;
+            double relativeZ = entity.getZ() - pivotZ;
+            entity.setPosition(
+                    pivotX + relativeX * cos - relativeZ * sin,
+                    entity.getY(),
+                    pivotZ + relativeX * sin + relativeZ * cos
+            );
+            entity.setYaw(session.yaw);
         }
         player.sendMessage(Text.literal(String.format("PSD rotation: %.2f°", session.yaw)), true);
     }
@@ -193,9 +197,6 @@ public final class PrecisionPSDManager {
         double dx = localX * Math.cos(radians) - localZ * Math.sin(radians);
         double dz = localX * Math.sin(radians) + localZ * Math.cos(radians);
         for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
-            if (!entity.isRemoved()) entity.setPosition(entity.getX() + dx, entity.getY() + y, entity.getZ() + dz);
-        }
-        for (ShulkerEntity entity : session.collisionParts) {
             if (!entity.isRemoved()) entity.setPosition(entity.getX() + dx, entity.getY() + y, entity.getZ() + dz);
         }
     }
@@ -220,11 +221,7 @@ public final class PrecisionPSDManager {
         for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
             if (!entity.isRemoved()) entity.discard();
         }
-        for (ShulkerEntity entity : session.collisionParts) {
-            if (!entity.isRemoved()) entity.discard();
-        }
         session.previewParts.clear();
-        session.collisionParts.clear();
         session.groupTag = null;
     }
 
@@ -236,7 +233,7 @@ public final class PrecisionPSDManager {
         double closestSq = distance * distance;
 
         for (Entity entity : player.getServerWorld().getOtherEntities(player, search,
-                e -> e.getCommandTags().contains(PLACED_TAG) && !e.getCommandTags().contains(COLLISION_TAG))) {
+                e -> e.getCommandTags().contains(PLACED_TAG))) {
             Optional<Vec3d> hit = entity.getBoundingBox().expand(0.2).raycast(start, end);
             if (hit.isEmpty()) continue;
             double sq = start.squaredDistanceTo(hit.get());
@@ -275,9 +272,6 @@ public final class PrecisionPSDManager {
                 entity.setYaw(session.yaw);
             }
         }
-        for (ShulkerEntity entity : session.collisionParts) {
-            if (!entity.isRemoved()) entity.setPosition(entity.getX() + dx, entity.getY() + dy, entity.getZ() + dz);
-        }
         player.sendMessage(Text.literal("Precision PSD properties applied"), true);
     }
 
@@ -302,11 +296,9 @@ public final class PrecisionPSDManager {
         private float yaw;
         private String groupTag;
         private final List<DisplayEntity.BlockDisplayEntity> previewParts = new ArrayList<>();
-        private final List<ShulkerEntity> collisionParts = new ArrayList<>();
 
         private boolean hasPreview() {
             previewParts.removeIf(entity -> entity == null || entity.isRemoved());
-            collisionParts.removeIf(entity -> entity == null || entity.isRemoved());
             return !previewParts.isEmpty();
         }
     }
