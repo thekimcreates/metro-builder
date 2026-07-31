@@ -21,6 +21,7 @@ public final class MetroBuilderNetworking {
     public static final Identifier OPEN_PSD_PROPERTIES = new Identifier(MetroBuilder.MOD_ID, "open_psd_properties");
     public static final Identifier SHOW_PSD_PROPERTIES = new Identifier(MetroBuilder.MOD_ID, "show_psd_properties");
     public static final Identifier APPLY_PSD_PROPERTIES = new Identifier(MetroBuilder.MOD_ID, "apply_psd_properties");
+    public static final Identifier MTR_DOOR_STATE = new Identifier(MetroBuilder.MOD_ID, "mtr_door_state");
 
     private MetroBuilderNetworking() {}
 
@@ -81,6 +82,13 @@ public final class MetroBuilderNetworking {
         ServerPlayNetworking.registerGlobalReceiver(APPLY_PSD_PROPERTIES, (server, player, handler, buf, responseSender) -> {
             double x=buf.readDouble(), y=buf.readDouble(), z=buf.readDouble(); float yaw=buf.readFloat(); String blockId=buf.readString(128);
             server.execute(() -> PrecisionPSDManager.applyProperties(player,x,y,z,yaw,blockId));
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(MTR_DOOR_STATE, (server, player, handler, buf, responseSender) -> {
+            double x = buf.readDouble(), y = buf.readDouble(), z = buf.readDouble();
+            float yaw = buf.readFloat();
+            double doorValue = buf.readDouble();
+            server.execute(() -> PrecisionPSDManager.applyTrainDoorState(player, x, y, z, yaw, doorValue));
         });
     }
 }

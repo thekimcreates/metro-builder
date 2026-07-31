@@ -64,8 +64,9 @@ public final class PrecisionPSDManager {
         if (session.previewParts.isEmpty()) return false;
         session.groupTag = groupTag;
         session.yaw = session.previewParts.get(0).getYaw();
-        session.blockId = GLASS_ID;
-        player.sendMessage(Text.literal("Precision glass selected | edit, then right-click to save"), true);
+        session.blockId = session.previewParts.stream().anyMatch(e -> e.getCommandTags().contains(DOOR_LEFT_TAG) || e.getCommandTags().contains(DOOR_RIGHT_TAG)) ? DOOR_ID : GLASS_ID;
+        session.origin = session.previewParts.get(0).getPos();
+        player.sendMessage(Text.literal("Precision PSD selected | edit, then right-click to save"), true);
         return true;
     }
 
@@ -112,6 +113,7 @@ public final class PrecisionPSDManager {
             return;
         }
         session.resolvedDoorId = resolved;
+        session.origin = position;
         BlockState lower = withStringProperty(door.getDefaultState(), "half", "lower");
         BlockState upper = withStringProperty(door.getDefaultState(), "half", "upper");
         spawnPart(player, session, lower, position);
@@ -126,7 +128,7 @@ public final class PrecisionPSDManager {
 
     private static void confirm(ServerPlayerEntity player, Session session) {
         if (!GLASS_ID.equals(session.blockId)) {
-            placeFunctionalDoor(player, session);
+            placePrecisionDoor(player, session);
             return;
         }
         for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
@@ -141,35 +143,88 @@ public final class PrecisionPSDManager {
         player.sendMessage(Text.literal("Precision glass assembly placed"), true);
     }
 
-    private static void placeFunctionalDoor(ServerPlayerEntity player, Session session) {
+    private static final String DOOR_ROOT_TAG = "metrobuilder.psd_door_root";
+    private static final String DOOR_LEFT_TAG = "metrobuilder.psd_door_left";
+    private static final String DOOR_RIGHT_TAG = "metrobuilder.psd_door_right";
+
+    private static void placePrecisionDoor(ServerPlayerEntity player, Session session) {
         if (session.previewParts.isEmpty()) return;
-        DisplayEntity.BlockDisplayEntity root = session.previewParts.get(0);
-        BlockPos basePos = BlockPos.ofFloored(root.getX(), root.getY(), root.getZ());
-        Direction facing = directionFromYaw(session.yaw);
+        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
+            if (!entity.isRemoved()) entity.discard();
+        }
+        session.previewParts.clear();
+
         String resolved = session.resolvedDoorId == null ? resolveDoorId() : session.resolvedDoorId;
         Block door = getBlock(resolved);
         if (door == null) return;
+        Vec3d origin = session.origin;
+        if (origin == null) return;
 
-        ServerWorld world = player.getServerWorld();
-        BlockState lower = applyFacing(withStringProperty(door.getDefaultState(), "half", "lower"), facing);
-        BlockState upper = applyFacing(withStringProperty(door.getDefaultState(), "half", "upper"), facing);
+        BlockState lower = withStringProperty(door.getDefaultState(), "half", "lower");
+        BlockState upper = withStringProperty(door.getDefaultState(), "half", "upper");
+        spawnPlacedDoorPart(player, session, lower, origin, DOOR_LEFT_TAG, -0.25, 0);
+        spawnPlacedDoorPart(player, session, upper, origin.add(0, 1, 0), DOOR_LEFT_TAG, -0.25, 0);
+        spawnPlacedDoorPart(player, session, lower, origin, DOOR_RIGHT_TAG, 0.25, 0);
+        spawnPlacedDoorPart(player, session, upper, origin.add(0, 1, 0), DOOR_RIGHT_TAG, 0.25, 0);
+
         Block topBlock = getBlock(DOOR_TOP_ID);
-        BlockState top = topBlock == null ? null : applyFacing(topBlock.getDefaultState(), facing);
-
-        if (!canReplace(world, basePos) || !canReplace(world, basePos.up()) || (top != null && !canReplace(world, basePos.up(2)))) {
-            player.sendMessage(Text.literal("PSD needs three clear blocks of height"), true);
-            return;
+        if (topBlock != null) {
+            DisplayEntity.BlockDisplayEntity root = spawnPlacedDoorPart(player, session, topBlock.getDefaultState(), origin.add(0, 2, 0), DOOR_ROOT_TAG, 0, 0);
+            if (root != null) root.addCommandTag(DOOR_ROOT_TAG);
+        } else {
+            DisplayEntity.BlockDisplayEntity root = spawnPlacedDoorPart(player, session, Blocks.BARRIER.getDefaultState(), origin.add(0, 2, 0), DOOR_ROOT_TAG, 0, 0);
+            if (root != null) root.setInvisible(true);
         }
+        session.groupTag = null;
+        player.sendMessage(Text.literal("Arbitrary-angle MetroBuilder PSD placed; MTR door synchronization active"), true);
+    }
 
-        discardPreview(session);
-        world.setBlockState(basePos, lower, Block.NOTIFY_ALL);
-        world.setBlockState(basePos.up(), upper, Block.NOTIFY_ALL);
-        if (top != null) world.setBlockState(basePos.up(2), top, Block.NOTIFY_ALL);
-        world.updateNeighbors(basePos, door);
-        world.updateNeighbors(basePos.up(), door);
-        if (top != null) world.updateNeighbors(basePos.up(2), topBlock);
+    private static DisplayEntity.BlockDisplayEntity spawnPlacedDoorPart(ServerPlayerEntity player, Session session, BlockState state, Vec3d base, String roleTag, double localX, double localZ) {
+        Vec3d position = localOffset(base, session.yaw, localX, localZ);
+        DisplayEntity.BlockDisplayEntity entity = new DisplayEntity.BlockDisplayEntity(EntityType.BLOCK_DISPLAY, player.getServerWorld());
+        NbtCompound nbt = new NbtCompound();
+        nbt.put("block_state", NbtHelper.fromBlockState(state));
+        nbt.putFloat("width", 1.5f);
+        nbt.putFloat("height", 3.0f);
+        entity.readNbt(nbt);
+        entity.setPosition(position.x, position.y, position.z);
+        entity.setYaw(session.yaw);
+        entity.addCommandTag(PLACED_TAG);
+        entity.addCommandTag(session.groupTag);
+        entity.addCommandTag(roleTag);
+        return player.getServerWorld().spawnEntity(entity) ? entity : null;
+    }
 
-        player.sendMessage(Text.literal("Functional " + (resolved.equals(DOOR_ID) ? "Tianjin BMT" : "MTR") + " PSD placed facing " + facing.asString()), true);
+    public static void applyTrainDoorState(ServerPlayerEntity sender, double x, double y, double z, float trainYawRadians, double doorValue) {
+        ServerWorld world = sender.getServerWorld();
+        Vec3d doorway = new Vec3d(x, y, z);
+        List<Entity> roots = world.getOtherEntities(null, new Box(x - 2.5, y - 3.0, z - 2.5, x + 2.5, y + 2.0, z + 2.5),
+                entity -> entity.getCommandTags().contains(DOOR_ROOT_TAG));
+        for (Entity rootEntity : roots) {
+            if (!(rootEntity instanceof DisplayEntity.BlockDisplayEntity root)) continue;
+            String groupTag = findGroupTag(root);
+            if (groupTag == null) continue;
+            Vec3d base = root.getPos().add(0, -2, 0);
+            if (base.squaredDistanceTo(doorway) > 9.0) continue;
+            float yaw = root.getYaw();
+            double trainYawDegrees = Math.toDegrees(trainYawRadians);
+            double angleDifference = Math.abs(((yaw - trainYawDegrees + 540) % 360) - 180);
+            angleDifference = Math.min(angleDifference, Math.abs(180 - angleDifference));
+            if (angleDifference > 35) continue;
+            double open = Math.max(0, Math.min(1, doorValue));
+            double slide = 0.48 * open;
+            List<Entity> parts = world.getOtherEntities(null, root.getBoundingBox().expand(4), e -> e.getCommandTags().contains(groupTag));
+            for (Entity partEntity : parts) {
+                if (!(partEntity instanceof DisplayEntity.BlockDisplayEntity part) || part == root) continue;
+                boolean left = part.getCommandTags().contains(DOOR_LEFT_TAG);
+                boolean right = part.getCommandTags().contains(DOOR_RIGHT_TAG);
+                if (!left && !right) continue;
+                double yOffset = part.getBlockState().getEntries().entrySet().stream().anyMatch(e -> e.getKey().getName().equals("half") && e.getValue().toString().equals("upper")) ? 1 : 0;
+                double local = (left ? -0.25 - slide : 0.25 + slide);
+                Vec3d target = localOffset(base.add(0, yOffset, 0), yaw, local, 0);
+                part.setPosition(target.x, target.y, target.z);
+            }
+        }
     }
 
     private static boolean canReplace(ServerWorld world, BlockPos pos) {
@@ -334,6 +389,7 @@ public final class PrecisionPSDManager {
         private String resolvedDoorId;
         private float yaw;
         private String groupTag;
+        private Vec3d origin;
         private final List<DisplayEntity.BlockDisplayEntity> previewParts = new ArrayList<>();
         private boolean hasPreview() {
             previewParts.removeIf(entity -> entity == null || entity.isRemoved());

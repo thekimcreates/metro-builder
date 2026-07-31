@@ -4,7 +4,9 @@
   "version": "${version}",
   "name": "MetroBuilder",
   "description": "Precision construction tools for Minecraft Transit Railway builders.",
-  "authors": ["thekimcreates"],
+  "authors": [
+    "thekimcreates"
+  ],
   "contact": {
     "sources": "https://github.com/thekimcreates/metro-builder",
     "issues": "https://github.com/thekimcreates/metro-builder/issues"
@@ -12,8 +14,12 @@
   "license": "MIT",
   "environment": "*",
   "entrypoints": {
-    "main": ["dev.metrobuilder.MetroBuilder"],
-    "client": ["dev.metrobuilder.client.MetroBuilderClient"]
+    "main": [
+      "dev.metrobuilder.MetroBuilder"
+    ],
+    "client": [
+      "dev.metrobuilder.client.MetroBuilderClient"
+    ]
   },
   "depends": {
     "fabricloader": ">=0.15.11",
@@ -23,5 +29,8 @@
   },
   "suggests": {
     "mtr": ">=4.0.0"
-  }
+  },
+  "mixins": [
+    "metrobuilder.mixins.json"
+  ]
 }
