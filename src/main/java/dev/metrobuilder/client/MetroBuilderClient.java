@@ -10,6 +10,9 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import dev.metrobuilder.entity.MetroBuilderEntities;
+import dev.metrobuilder.client.render.PrecisionPSDRenderer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
@@ -20,6 +23,7 @@ import java.util.*;
 public final class MetroBuilderClient implements ClientModInitializer {
     private static KeyBinding rotateRight, rotateLeft, moveLeft, moveRight, moveForward, moveBack, moveUp, moveDown, cycleType, cancel, properties;
     @Override public void onInitializeClient() {
+        EntityRendererRegistry.register(MetroBuilderEntities.PRECISION_PSD, PrecisionPSDRenderer::new);
         rotateRight=reg("rotate_right",GLFW.GLFW_KEY_RIGHT_BRACKET); rotateLeft=reg("rotate_left",GLFW.GLFW_KEY_LEFT_BRACKET);
         moveLeft=reg("move_left",GLFW.GLFW_KEY_LEFT); moveRight=reg("move_right",GLFW.GLFW_KEY_RIGHT);
         moveForward=reg("move_forward",GLFW.GLFW_KEY_UP); moveBack=reg("move_back",GLFW.GLFW_KEY_DOWN);
