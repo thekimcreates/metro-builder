@@ -1,9 +1,11 @@
 package dev.thekimcreates.metrobuilder.client.network;
 
+import dev.thekimcreates.metrobuilder.client.psd.ClientPSDObject;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.util.Identifier;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,6 +14,7 @@ public final class ClientPrecisionState {
     private static Identifier dimensionId;
     private static NbtCompound snapshot = new NbtCompound();
     private static UUID selectedObjectId;
+    private static List<ClientPSDObject> psds = List.of();
 
     private ClientPrecisionState() {
     }
@@ -19,6 +22,7 @@ public final class ClientPrecisionState {
     public static synchronized void applySnapshot(Identifier newDimensionId, NbtCompound newSnapshot) {
         dimensionId = newDimensionId;
         snapshot = newSnapshot.copy();
+        psds = ClientPSDObject.decodeSnapshot(snapshot);
     }
 
     public static synchronized void applySelection(Identifier selectedDimensionId, UUID objectId) {
@@ -49,9 +53,14 @@ public final class ClientPrecisionState {
         return Optional.ofNullable(selectedObjectId);
     }
 
+    public static synchronized List<ClientPSDObject> psds() {
+        return List.copyOf(psds);
+    }
+
     public static synchronized void reset() {
         dimensionId = null;
         snapshot = new NbtCompound();
         selectedObjectId = null;
+        psds = List.of();
     }
 }
