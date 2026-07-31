@@ -2,6 +2,7 @@ package dev.metrobuilder.display;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.DisplayEntity;
@@ -13,7 +14,9 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.Property;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
@@ -25,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class PrecisionPSDManager {
     public static final String DOOR_ID = "tjmetro:psd_door_tianjin_bmt";
+    public static final String FALLBACK_DOOR_ID = "mtr:psd_door";
+    public static final String DOOR_TOP_ID = "tjmetro:psd_top_tianjin_bmt";
     public static final String GLASS_ID = "mtr:psd_glass";
     public static final String TOP_ID = "mtr:psd_top";
 
@@ -42,17 +47,13 @@ public final class PrecisionPSDManager {
     public static boolean selectLookedAt(ServerPlayerEntity player) {
         Session session = get(player);
         if (session.hasPreview()) return false;
-
         Entity hit = findLookedAtPlacedPart(player, 6.0);
         if (hit == null) return false;
-
         String groupTag = findGroupTag(hit);
         if (groupTag == null) return false;
 
-        ServerWorld world = player.getServerWorld();
-        Box search = hit.getBoundingBox().expand(8.0);
-        List<Entity> group = world.getOtherEntities(null, search, entity -> entity.getCommandTags().contains(groupTag));
-
+        List<Entity> group = player.getServerWorld().getOtherEntities(null, hit.getBoundingBox().expand(8.0),
+                entity -> entity.getCommandTags().contains(groupTag));
         for (Entity entity : group) {
             if (entity instanceof DisplayEntity.BlockDisplayEntity display) {
                 display.setGlowing(true);
@@ -60,14 +61,12 @@ public final class PrecisionPSDManager {
                 session.previewParts.add(display);
             }
         }
-
-        if (!session.previewParts.isEmpty()) {
-            session.groupTag = groupTag;
-            session.yaw = session.previewParts.get(0).getYaw();
-            player.sendMessage(Text.literal("Precision PSD selected | adjust it, then right-click to save"), true);
-            return true;
-        }
-        return false;
+        if (session.previewParts.isEmpty()) return false;
+        session.groupTag = groupTag;
+        session.yaw = session.previewParts.get(0).getYaw();
+        session.blockId = GLASS_ID;
+        player.sendMessage(Text.literal("Precision glass selected | edit, then right-click to save"), true);
+        return true;
     }
 
     public static void startOrConfirm(ServerPlayerEntity player, Vec3d position) {
@@ -77,48 +76,59 @@ public final class PrecisionPSDManager {
             return;
         }
 
-        Identifier id = Identifier.tryParse(session.blockId);
-        if (id == null || !Registries.BLOCK.containsId(id)) {
-            player.sendMessage(Text.literal("Required block is unavailable: " + session.blockId), false);
-            return;
-        }
-
         session.groupTag = GROUP_PREFIX + UUID.randomUUID();
-        Block block = Registries.BLOCK.get(id);
-
-        if (session.blockId.equals(GLASS_ID)) {
-            BlockState lower = withStringProperty(withStringProperty(block.getDefaultState(), "side", "single"), "half", "lower");
-            BlockState upper = withStringProperty(withStringProperty(block.getDefaultState(), "side", "single"), "half", "upper");
-
-            Identifier topId = Identifier.tryParse(TOP_ID);
-            BlockState top = null;
-            if (topId != null && Registries.BLOCK.containsId(topId)) {
-                top = withStringProperty(
-                        withStringProperty(Registries.BLOCK.get(topId).getDefaultState(), "air_left", "false"),
-                        "air_right", "false"
-                );
-            } else {
-                player.sendMessage(Text.literal("Warning: required block is unavailable: " + TOP_ID), false);
-            }
-
-            // One glass placement is a connected three-panel assembly. Every part shares
-            // the same group tag and is transformed as one object when moved or rotated.
-            for (int panel = 0; panel < 3; panel++) {
-                Vec3d panelBase = localOffset(position, session.yaw, panel, 0);
-                spawnPart(player, session, lower, panelBase);
-                spawnPart(player, session, upper, panelBase.add(0, 1, 0));
-                if (top != null) spawnPart(player, session, top, panelBase.add(0, 2, 0));
-            }
+        if (GLASS_ID.equals(session.blockId)) {
+            createGlassPreview(player, session, position);
         } else {
-            spawnPart(player, session, block.getDefaultState(), position);
-        }
-
-        if (session.hasPreview()) {
-            player.sendMessage(Text.literal("Preview: " + displayName(session.blockId) + " | right-click again to place"), true);
+            createDoorPreview(player, session, position);
         }
     }
 
+    private static void createGlassPreview(ServerPlayerEntity player, Session session, Vec3d position) {
+        Block glass = getBlock(GLASS_ID);
+        if (glass == null) {
+            player.sendMessage(Text.literal("Required block is unavailable: " + GLASS_ID), false);
+            return;
+        }
+        BlockState lower = withStringProperty(withStringProperty(glass.getDefaultState(), "side", "single"), "half", "lower");
+        BlockState upper = withStringProperty(withStringProperty(glass.getDefaultState(), "side", "single"), "half", "upper");
+        Block topBlock = getBlock(TOP_ID);
+        BlockState top = topBlock == null ? null : withStringProperty(withStringProperty(topBlock.getDefaultState(), "air_left", "false"), "air_right", "false");
+
+        for (int panel = 0; panel < 3; panel++) {
+            Vec3d base = localOffset(position, session.yaw, panel, 0);
+            spawnPart(player, session, lower, base);
+            spawnPart(player, session, upper, base.add(0, 1, 0));
+            if (top != null) spawnPart(player, session, top, base.add(0, 2, 0));
+        }
+        player.sendMessage(Text.literal("Preview: 3 connected MTR glass panels | right-click to place"), true);
+    }
+
+    private static void createDoorPreview(ServerPlayerEntity player, Session session, Vec3d position) {
+        String resolved = resolveDoorId();
+        Block door = getBlock(resolved);
+        if (door == null) {
+            player.sendMessage(Text.literal("Neither Tianjin nor MTR PSD door is available"), false);
+            return;
+        }
+        session.resolvedDoorId = resolved;
+        BlockState lower = withStringProperty(door.getDefaultState(), "half", "lower");
+        BlockState upper = withStringProperty(door.getDefaultState(), "half", "upper");
+        spawnPart(player, session, lower, position);
+        spawnPart(player, session, upper, position.add(0, 1, 0));
+
+        Block topBlock = getBlock(DOOR_TOP_ID);
+        if (topBlock != null) {
+            spawnPart(player, session, topBlock.getDefaultState(), position.add(0, 2, 0));
+        }
+        player.sendMessage(Text.literal("Functional PSD preview | rotation will snap to 90° when placed"), true);
+    }
+
     private static void confirm(ServerPlayerEntity player, Session session) {
+        if (!GLASS_ID.equals(session.blockId)) {
+            placeFunctionalDoor(player, session);
+            return;
+        }
         for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
             if (!entity.isRemoved()) {
                 entity.removeCommandTag(PREVIEW_TAG);
@@ -128,7 +138,62 @@ public final class PrecisionPSDManager {
         }
         session.previewParts.clear();
         session.groupTag = null;
-        player.sendMessage(Text.literal("Precision PSD placed"), true);
+        player.sendMessage(Text.literal("Precision glass assembly placed"), true);
+    }
+
+    private static void placeFunctionalDoor(ServerPlayerEntity player, Session session) {
+        if (session.previewParts.isEmpty()) return;
+        DisplayEntity.BlockDisplayEntity root = session.previewParts.get(0);
+        BlockPos basePos = BlockPos.ofFloored(root.getX(), root.getY(), root.getZ());
+        Direction facing = directionFromYaw(session.yaw);
+        String resolved = session.resolvedDoorId == null ? resolveDoorId() : session.resolvedDoorId;
+        Block door = getBlock(resolved);
+        if (door == null) return;
+
+        ServerWorld world = player.getServerWorld();
+        BlockState lower = applyFacing(withStringProperty(door.getDefaultState(), "half", "lower"), facing);
+        BlockState upper = applyFacing(withStringProperty(door.getDefaultState(), "half", "upper"), facing);
+        Block topBlock = getBlock(DOOR_TOP_ID);
+        BlockState top = topBlock == null ? null : applyFacing(topBlock.getDefaultState(), facing);
+
+        if (!canReplace(world, basePos) || !canReplace(world, basePos.up()) || (top != null && !canReplace(world, basePos.up(2)))) {
+            player.sendMessage(Text.literal("PSD needs three clear blocks of height"), true);
+            return;
+        }
+
+        discardPreview(session);
+        world.setBlockState(basePos, lower, Block.NOTIFY_ALL);
+        world.setBlockState(basePos.up(), upper, Block.NOTIFY_ALL);
+        if (top != null) world.setBlockState(basePos.up(2), top, Block.NOTIFY_ALL);
+        world.updateNeighbors(basePos, door);
+        world.updateNeighbors(basePos.up(), door);
+        if (top != null) world.updateNeighbors(basePos.up(2), topBlock);
+
+        player.sendMessage(Text.literal("Functional " + (resolved.equals(DOOR_ID) ? "Tianjin BMT" : "MTR") + " PSD placed facing " + facing.asString()), true);
+    }
+
+    private static boolean canReplace(ServerWorld world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        return state.isAir() || state.isReplaceable();
+    }
+
+    private static String resolveDoorId() {
+        return getBlock(DOOR_ID) != null ? DOOR_ID : FALLBACK_DOOR_ID;
+    }
+
+    private static Block getBlock(String idString) {
+        Identifier id = Identifier.tryParse(idString);
+        if (id == null || !Registries.BLOCK.containsId(id)) return null;
+        Block block = Registries.BLOCK.get(id);
+        return block == Blocks.AIR ? null : block;
+    }
+
+    private static Direction directionFromYaw(float yaw) {
+        return Direction.fromRotation(Math.round(normalize(yaw) / 90.0f) * 90.0f);
+    }
+
+    private static BlockState applyFacing(BlockState state, Direction facing) {
+        return withStringProperty(state, "facing", facing.asString());
     }
 
     private static void spawnPart(ServerPlayerEntity player, Session session, BlockState state, Vec3d position) {
@@ -142,16 +207,14 @@ public final class PrecisionPSDManager {
         entity.setYaw(session.yaw);
         entity.setGlowing(true);
         entity.addCommandTag(PREVIEW_TAG);
-        entity.addCommandTag(PLACED_TAG);
         entity.addCommandTag(session.groupTag);
         if (player.getServerWorld().spawnEntity(entity)) session.previewParts.add(entity);
     }
 
     private static Vec3d localOffset(Vec3d origin, float yaw, double localX, double localZ) {
         double radians = Math.toRadians(yaw);
-        double dx = localX * Math.cos(radians) - localZ * Math.sin(radians);
-        double dz = localX * Math.sin(radians) + localZ * Math.cos(radians);
-        return origin.add(dx, 0, dz);
+        return origin.add(localX * Math.cos(radians) - localZ * Math.sin(radians), 0,
+                localX * Math.sin(radians) + localZ * Math.cos(radians));
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -167,24 +230,13 @@ public final class PrecisionPSDManager {
     public static void rotate(ServerPlayerEntity player, float delta) {
         Session session = get(player);
         if (!session.hasPreview()) return;
-
         DisplayEntity.BlockDisplayEntity root = session.previewParts.get(0);
-        double pivotX = root.getX();
-        double pivotZ = root.getZ();
-        double radians = Math.toRadians(delta);
-        double cos = Math.cos(radians);
-        double sin = Math.sin(radians);
-
+        double pivotX = root.getX(), pivotZ = root.getZ();
+        double radians = Math.toRadians(delta), cos = Math.cos(radians), sin = Math.sin(radians);
         session.yaw = normalize(session.yaw + delta);
         for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
-            if (entity.isRemoved()) continue;
-            double relativeX = entity.getX() - pivotX;
-            double relativeZ = entity.getZ() - pivotZ;
-            entity.setPosition(
-                    pivotX + relativeX * cos - relativeZ * sin,
-                    entity.getY(),
-                    pivotZ + relativeX * sin + relativeZ * cos
-            );
+            double x = entity.getX() - pivotX, z = entity.getZ() - pivotZ;
+            entity.setPosition(pivotX + x * cos - z * sin, entity.getY(), pivotZ + x * sin + z * cos);
             entity.setYaw(session.yaw);
         }
         player.sendMessage(Text.literal(String.format("PSD rotation: %.2f°", session.yaw)), true);
@@ -196,31 +248,26 @@ public final class PrecisionPSDManager {
         double radians = Math.toRadians(session.yaw);
         double dx = localX * Math.cos(radians) - localZ * Math.sin(radians);
         double dz = localX * Math.sin(radians) + localZ * Math.cos(radians);
-        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
-            if (!entity.isRemoved()) entity.setPosition(entity.getX() + dx, entity.getY() + y, entity.getZ() + dz);
-        }
+        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) entity.setPosition(entity.getX() + dx, entity.getY() + y, entity.getZ() + dz);
     }
 
     public static void toggleType(ServerPlayerEntity player) {
         Session session = get(player);
         if (session.hasPreview()) {
-            player.sendMessage(Text.literal("Finish or cancel the selected PSD before switching type"), true);
+            player.sendMessage(Text.literal("Finish or cancel the current preview first"), true);
             return;
         }
-        session.blockId = session.blockId.equals(DOOR_ID) ? GLASS_ID : DOOR_ID;
+        session.blockId = GLASS_ID.equals(session.blockId) ? DOOR_ID : GLASS_ID;
         player.sendMessage(Text.literal("PSD type: " + displayName(session.blockId)), true);
     }
 
     public static void cancel(ServerPlayerEntity player) {
-        Session session = get(player);
-        discardPreview(session);
-        player.sendMessage(Text.literal("Precision PSD preview cancelled"), true);
+        discardPreview(get(player));
+        player.sendMessage(Text.literal("PSD preview cancelled"), true);
     }
 
     private static void discardPreview(Session session) {
-        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
-            if (!entity.isRemoved()) entity.discard();
-        }
+        for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) if (!entity.isRemoved()) entity.discard();
         session.previewParts.clear();
         session.groupTag = null;
     }
@@ -231,14 +278,10 @@ public final class PrecisionPSDManager {
         Box search = player.getBoundingBox().stretch(player.getRotationVec(1.0f).multiply(distance)).expand(1.0);
         Entity closest = null;
         double closestSq = distance * distance;
-
-        for (Entity entity : player.getServerWorld().getOtherEntities(player, search,
-                e -> e.getCommandTags().contains(PLACED_TAG))) {
+        for (Entity entity : player.getServerWorld().getOtherEntities(player, search, e -> e.getCommandTags().contains(PLACED_TAG))) {
             Optional<Vec3d> hit = entity.getBoundingBox().expand(0.2).raycast(start, end);
-            if (hit.isEmpty()) continue;
-            double sq = start.squaredDistanceTo(hit.get());
-            if (sq < closestSq) {
-                closestSq = sq;
+            if (hit.isPresent() && start.squaredDistanceTo(hit.get()) < closestSq) {
+                closestSq = start.squaredDistanceTo(hit.get());
                 closest = entity;
             }
         }
@@ -261,18 +304,13 @@ public final class PrecisionPSDManager {
         Session session = get(player);
         if (!session.hasPreview()) return;
         DisplayEntity.BlockDisplayEntity root = session.previewParts.get(0);
-        double dx = x - root.getX();
-        double dy = y - root.getY();
-        double dz = z - root.getZ();
+        double dx = x - root.getX(), dy = y - root.getY(), dz = z - root.getZ();
         session.yaw = normalize(yaw);
-        if (DOOR_ID.equals(blockId) || GLASS_ID.equals(blockId)) session.blockId = blockId;
         for (DisplayEntity.BlockDisplayEntity entity : session.previewParts) {
-            if (!entity.isRemoved()) {
-                entity.setPosition(entity.getX() + dx, entity.getY() + dy, entity.getZ() + dz);
-                entity.setYaw(session.yaw);
-            }
+            entity.setPosition(entity.getX() + dx, entity.getY() + dy, entity.getZ() + dz);
+            entity.setYaw(session.yaw);
         }
-        player.sendMessage(Text.literal("Precision PSD properties applied"), true);
+        player.sendMessage(Text.literal("PSD properties applied"), true);
     }
 
     public record PropertiesSnapshot(double x, double y, double z, float yaw, String blockId) {}
@@ -288,15 +326,15 @@ public final class PrecisionPSDManager {
     }
 
     private static String displayName(String id) {
-        return id.equals(DOOR_ID) ? "Tianjin BMT PSD Door" : "MTR PSD Glass + Top";
+        return GLASS_ID.equals(id) ? "MTR glass (3 connected panels)" : "Functional Tianjin BMT PSD door";
     }
 
     public static final class Session {
         private String blockId = DOOR_ID;
+        private String resolvedDoorId;
         private float yaw;
         private String groupTag;
         private final List<DisplayEntity.BlockDisplayEntity> previewParts = new ArrayList<>();
-
         private boolean hasPreview() {
             previewParts.removeIf(entity -> entity == null || entity.isRemoved());
             return !previewParts.isEmpty();
