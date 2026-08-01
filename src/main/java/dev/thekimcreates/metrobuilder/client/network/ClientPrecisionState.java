@@ -57,6 +57,21 @@ public final class ClientPrecisionState {
         return List.copyOf(psds);
     }
 
+    public static synchronized Optional<ClientPSDObject> findPsd(UUID objectId) {
+        return psds.stream().filter(psd -> psd.id().equals(objectId)).findFirst();
+    }
+
+    public static synchronized void updatePsdTransform(
+            UUID objectId,
+            dev.thekimcreates.metrobuilder.precision.PrecisionTransform transform
+    ) {
+        psds = psds.stream()
+                .map(psd -> psd.id().equals(objectId)
+                        ? new ClientPSDObject(psd.id(), transform, psd.packId(), psd.doorValue())
+                        : psd)
+                .toList();
+    }
+
     public static synchronized void reset() {
         dimensionId = null;
         snapshot = new NbtCompound();

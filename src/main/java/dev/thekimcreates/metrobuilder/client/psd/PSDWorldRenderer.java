@@ -1,6 +1,7 @@
 package dev.thekimcreates.metrobuilder.client.psd;
 
 import dev.thekimcreates.metrobuilder.MetroBuilder;
+import dev.thekimcreates.metrobuilder.client.builder.BuilderWandClientController;
 import dev.thekimcreates.metrobuilder.client.network.ClientPrecisionState;
 import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
@@ -10,6 +11,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.OverlayTexture;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -20,6 +22,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
@@ -79,12 +82,26 @@ public final class PSDWorldRenderer {
         }
 
         final Vec3d cameraPosition = context.camera().getPos();
+        final Optional<java.util.UUID> selectedId = ClientPrecisionState.selectedObjectId();
         for (ClientPSDObject psd : ClientPrecisionState.psds()) {
             if (psd.transform().squaredDistanceTo(cameraPosition) > MAX_RENDER_DISTANCE_SQUARED) {
                 continue;
             }
-            renderPsd(client, matrices, consumers, cameraPosition, psd);
+            renderPsd(
+                    client,
+                    matrices,
+                    consumers,
+                    cameraPosition,
+                    psd,
+                    selectedId.filter(psd.id()::equals).isPresent()
+            );
         }
+
+        BuilderWandClientController.pendingPreview().ifPresent(pending -> {
+            if (pending.transform().squaredDistanceTo(cameraPosition) <= MAX_RENDER_DISTANCE_SQUARED) {
+                renderPsd(client, matrices, consumers, cameraPosition, pending, true);
+            }
+        });
     }
 
     private static void renderPsd(
@@ -92,7 +109,8 @@ public final class PSDWorldRenderer {
             MatrixStack matrices,
             VertexConsumerProvider consumers,
             Vec3d cameraPosition,
-            ClientPSDObject psd
+            ClientPSDObject psd,
+            boolean outlined
     ) {
         final PrecisionTransform transform = psd.transform();
 
@@ -117,6 +135,18 @@ public final class PSDWorldRenderer {
                 MetroBuilder.LOGGER.warn("TJMetro BMT PSD blocks are unavailable; rendering a simple iron-block fallback");
             }
             renderFallbackAssembly(client, matrices, consumers, transform);
+        }
+
+        if (outlined) {
+            WorldRenderer.drawBox(
+                    matrices,
+                    consumers.getBuffer(RenderLayer.getLines()),
+                    new Box(-1.0D, 0.0D, -0.16D, 1.0D, 3.0D, 0.16D),
+                    1.0F,
+                    1.0F,
+                    1.0F,
+                    1.0F
+            );
         }
 
         matrices.pop();

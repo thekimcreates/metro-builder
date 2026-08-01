@@ -2,6 +2,7 @@ package dev.thekimcreates.metrobuilder.client.network;
 
 import dev.thekimcreates.metrobuilder.MetroBuilder;
 import dev.thekimcreates.metrobuilder.network.PrecisionNetworking;
+import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
@@ -11,7 +12,7 @@ import net.minecraft.util.Identifier;
 
 import java.util.UUID;
 
-/** Registers client receivers for precision snapshots and selection state. */
+/** Registers client receivers and requests for precision state. */
 public final class PrecisionClientNetworking {
     private static boolean initialized;
 
@@ -52,9 +53,10 @@ public final class PrecisionClientNetworking {
                 }
         );
 
-        ClientPlayConnectionEvents.DISCONNECT.register(
-                (handler, client) -> ClientPrecisionState.reset()
-        );
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            ClientPrecisionState.reset();
+            dev.thekimcreates.metrobuilder.client.builder.BuilderWandClientController.reset();
+        });
 
         MetroBuilder.LOGGER.info("Precision client networking initialized");
     }
@@ -70,5 +72,19 @@ public final class PrecisionClientNetworking {
         final PacketByteBuf buffer = PacketByteBufs.create();
         buffer.writeBoolean(false);
         ClientPlayNetworking.send(PrecisionNetworking.SELECTION_REQUEST, buffer);
+    }
+
+    public static void placePsd(Identifier packId, PrecisionTransform transform) {
+        final PacketByteBuf buffer = PacketByteBufs.create();
+        buffer.writeIdentifier(packId);
+        PrecisionNetworking.writeTransform(buffer, transform);
+        ClientPlayNetworking.send(PrecisionNetworking.PSD_PLACE, buffer);
+    }
+
+    public static void updatePsdTransform(UUID objectId, PrecisionTransform transform) {
+        final PacketByteBuf buffer = PacketByteBufs.create();
+        buffer.writeUuid(objectId);
+        PrecisionNetworking.writeTransform(buffer, transform);
+        ClientPlayNetworking.send(PrecisionNetworking.PSD_UPDATE_TRANSFORM, buffer);
     }
 }

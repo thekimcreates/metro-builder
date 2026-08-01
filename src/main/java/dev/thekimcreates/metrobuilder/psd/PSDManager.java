@@ -61,6 +61,17 @@ public final class PSDManager {
         return all(world).size();
     }
 
+    public static boolean updateTransform(
+            ServerWorld world,
+            UUID objectId,
+            PrecisionTransform transform
+    ) {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(objectId, "objectId");
+        Objects.requireNonNull(transform, "transform");
+        return precisionManager(world).updateTransform(objectId, transform);
+    }
+
     public static boolean remove(ServerWorld world, UUID objectId) {
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(objectId, "objectId");
