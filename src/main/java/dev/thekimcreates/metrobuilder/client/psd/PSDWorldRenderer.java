@@ -6,84 +6,42 @@ import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.state.property.Property;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
+import java.util.Optional;
+
 /** Renders synchronized precision PSD objects directly into the client world. */
 public final class PSDWorldRenderer {
     private static final double MAX_RENDER_DISTANCE = 192.0D;
     private static final double MAX_RENDER_DISTANCE_SQUARED = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE;
 
-    /*
-     * TJMetro BMT proportions, matching the supplied in-game reference:
-     * - total width: 2 blocks
-     * - total height: 3 blocks
-     * - glass door body: 2 blocks tall
-     * - route/header enclosure: 1 block tall
-     */
-    private static final float HALF_WIDTH = 1.0F;
-    private static final float DOOR_BODY_HEIGHT = 2.0F;
-    private static final float HEADER_MIN_Y = 2.0F;
-    private static final float HEADER_MAX_Y = 3.0F;
-
-    /*
-     * TJMetro's ModelSingleCube is not centered in the block. Its 2/16-deep
-     * door leaves sit against the platform-facing side of the block. Keeping
-     * that offset is essential to reproduce the real PSD silhouette.
-     */
-    private static final float DOOR_BACK_Z = 6.0F / 16.0F;
-    private static final float DOOR_FRONT_Z = 8.0F / 16.0F;
-
-    /* The BMT top enclosure projects behind the door while sharing its front face. */
-    private static final float HEADER_BACK_Z = -2.0F / 16.0F;
-    private static final float HEADER_FRONT_Z = 8.0F / 16.0F;
-
-    /* Dark lower fascia visible beneath the BMT header in the real model. */
-    private static final float FASCIA_MIN_Y = 1.9375F;
-    private static final float FASCIA_MAX_Y = 2.0625F;
-    private static final float FASCIA_BACK_Z = 4.75F / 16.0F;
-    private static final float FASCIA_FRONT_Z = 8.25F / 16.0F;
-
-    /* TJMetro's door cuboid declares a logical texture size of 36 x 18. */
-    private static final float DOOR_TEXTURE_WIDTH = 36.0F;
-    private static final float DOOR_TEXTURE_HEIGHT = 18.0F;
-
     private static final Identifier FALLBACK_TEXTURE = new Identifier("minecraft", "textures/block/iron_block.png");
-    private static final Identifier BLACK_TEXTURE = new Identifier("minecraft", "textures/block/black_concrete.png");
-    private static final Identifier TJ_BOTTOM_LEFT = new Identifier(
-            "tjmetro",
-            "textures/block/psd_door_tianjin_bottom_left.png"
-    );
-    private static final Identifier TJ_BOTTOM_RIGHT = new Identifier(
-            "tjmetro",
-            "textures/block/psd_door_tianjin_bottom_right.png"
-    );
-    private static final Identifier TJ_TOP_LEFT = new Identifier(
-            "tjmetro",
-            "textures/block/psd_door_tianjin_top_left.png"
-    );
-    private static final Identifier TJ_TOP_RIGHT = new Identifier(
-            "tjmetro",
-            "textures/block/psd_door_tianjin_top_right.png"
-    );
-    private static final Identifier TJ_HEADER = new Identifier(
-            "tjmetro",
-            "textures/block/psd_tianjin_bmt_top.png"
-    );
-    private static final Identifier TJ_HEADER_EDGE = new Identifier(
-            "tjmetro",
-            "textures/block/psd_tianjin_bmt_top_edge.png"
-    );
+    private static final Identifier TJ_BOTTOM_LEFT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_bottom_left.png");
+    private static final Identifier TJ_BOTTOM_RIGHT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_bottom_right.png");
+    private static final Identifier TJ_TOP_LEFT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_top_left.png");
+    private static final Identifier TJ_TOP_RIGHT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_top_right.png");
+    private static final Identifier TJ_BMT_TOP_TEXTURE = new Identifier("tjmetro", "textures/block/psd_tianjin_bmt_top.png");
+    private static final Identifier TJ_BMT_TOP_BLOCK = new Identifier("tjmetro", "psd_top_tianjin_bmt");
+
+    private static final float HEADER_FRONT_Z = 0.5005F;
+    private static final float HEADER_BACK_Z = -0.5005F;
 
     private static boolean initialized;
 
@@ -141,283 +99,140 @@ public final class PSDWorldRenderer {
         matrices.scale(transform.scaleX(), transform.scaleY(), transform.scaleZ());
 
         if (FabricLoader.getInstance().isModLoaded("tjmetro")) {
-            /* Four 1 x 1 TJMetro door sections form the exact 2 x 2 lower body. */
-            drawDoorSection(matrices, consumers, TJ_BOTTOM_LEFT, -HALF_WIDTH, 0.0F, 0.0F, 1.0F);
-            drawDoorSection(matrices, consumers, TJ_BOTTOM_RIGHT, 0.0F, 0.0F, HALF_WIDTH, 1.0F);
-            drawDoorSection(matrices, consumers, TJ_TOP_LEFT, -HALF_WIDTH, 1.0F, 0.0F, DOOR_BODY_HEIGHT);
-            drawDoorSection(matrices, consumers, TJ_TOP_RIGHT, 0.0F, 1.0F, HALF_WIDTH, DOOR_BODY_HEIGHT);
-
-            drawHeaderEnclosure(matrices, consumers);
-            drawFullTextureCuboid(
-                    matrices,
-                    consumers,
-                    BLACK_TEXTURE,
-                    -HALF_WIDTH,
-                    FASCIA_MIN_Y,
-                    FASCIA_BACK_Z,
-                    HALF_WIDTH,
-                    FASCIA_MAX_Y,
-                    FASCIA_FRONT_Z
-            );
+            renderExactTianjinDoor(matrices, consumers);
+            if (!renderExactTianjinTop(matrices, consumers)) {
+                renderFallbackHeader(matrices, consumers, TJ_BMT_TOP_TEXTURE);
+            }
         } else {
-            drawFullTextureCuboid(
-                    matrices,
-                    consumers,
-                    FALLBACK_TEXTURE,
-                    -HALF_WIDTH,
-                    0.0F,
-                    DOOR_BACK_Z,
-                    HALF_WIDTH,
-                    DOOR_BODY_HEIGHT,
-                    DOOR_FRONT_Z
-            );
-            drawFullTextureCuboid(
-                    matrices,
-                    consumers,
-                    FALLBACK_TEXTURE,
-                    -HALF_WIDTH,
-                    HEADER_MIN_Y,
-                    HEADER_BACK_Z,
-                    HALF_WIDTH,
-                    HEADER_MAX_Y,
-                    HEADER_FRONT_Z
-            );
+            renderFallbackBody(matrices, consumers);
+            renderFallbackHeader(matrices, consumers, FALLBACK_TEXTURE);
         }
 
         matrices.pop();
     }
 
     /**
-     * Draws one 1 x 1 x 0.125 TJMetro door section.
-     *
-     * The supplied PNG is a 36 x 18 logical cuboid atlas stored at 2x pixel
-     * resolution. The platform-facing surface corresponds to the atlas's
-     * second 16 x 16 face. Using that face restores the gray threshold, thick
-     * black mullions, and clear glass arrangement visible in TJMetro.
+     * Reproduces the four real TJMetro BMT door block entities with the same
+     * ModelPart cuboid and logical texture size used by RenderPSDDoorTianjinBMT.
      */
-    private static void drawDoorSection(
+    private static void renderExactTianjinDoor(MatrixStack matrices, VertexConsumerProvider consumers) {
+        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_BOTTOM_LEFT, -0.5F, 0.0F);
+        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_BOTTOM_RIGHT, 0.5F, 0.0F);
+        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_TOP_LEFT, -0.5F, 1.0F);
+        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_TOP_RIGHT, 0.5F, 1.0F);
+    }
+
+    /**
+     * Renders the real TJMetro multipart top block models. Two block states are
+     * assembled exactly as an isolated two-block-wide BMT door would be in-world.
+     */
+    private static boolean renderExactTianjinTop(MatrixStack matrices, VertexConsumerProvider consumers) {
+        final MinecraftClient client = MinecraftClient.getInstance();
+        if (!Registries.BLOCK.containsId(TJ_BMT_TOP_BLOCK)) {
+            return false;
+        }
+        final Block topBlock = Registries.BLOCK.get(TJ_BMT_TOP_BLOCK);
+        if (topBlock == null) {
+            return false;
+        }
+
+        BlockState leftState = topBlock.getDefaultState();
+        leftState = withProperty(leftState, "facing", "north");
+        leftState = withProperty(leftState, "side", "left");
+        leftState = withProperty(leftState, "air_left", "true");
+        leftState = withProperty(leftState, "air_right", "false");
+        leftState = withProperty(leftState, "style", "bmt");
+        leftState = withProperty(leftState, "arrow_direction", "0");
+
+        BlockState rightState = topBlock.getDefaultState();
+        rightState = withProperty(rightState, "facing", "north");
+        rightState = withProperty(rightState, "side", "right");
+        rightState = withProperty(rightState, "air_left", "false");
+        rightState = withProperty(rightState, "air_right", "true");
+        rightState = withProperty(rightState, "style", "bmt");
+        rightState = withProperty(rightState, "arrow_direction", "0");
+
+        renderBlockModel(client, matrices, consumers, leftState, -1.0F, 2.0F, -0.5F);
+        renderBlockModel(client, matrices, consumers, rightState, 0.0F, 2.0F, -0.5F);
+
+        // TJMetro's block entity normally fills the center with a dynamic station-name texture.
+        // Beta 1 renders the official neutral BMT casing texture in that exact 2 x 1 area.
+        renderHeaderPanel(matrices, consumers, TJ_BMT_TOP_TEXTURE);
+        return true;
+    }
+
+    private static void renderBlockModel(
+            MinecraftClient client,
             MatrixStack matrices,
             VertexConsumerProvider consumers,
-            Identifier texture,
-            float minX,
-            float minY,
-            float maxX,
-            float maxY
+            BlockState state,
+            float x,
+            float y,
+            float z
     ) {
-        final float u0 = 0.0F / DOOR_TEXTURE_WIDTH;
-        final float u1 = 2.0F / DOOR_TEXTURE_WIDTH;
-        final float u2 = 18.0F / DOOR_TEXTURE_WIDTH;
-        final float u3 = 20.0F / DOOR_TEXTURE_WIDTH;
-        final float u4 = 34.0F / DOOR_TEXTURE_WIDTH;
-        final float u5 = 36.0F / DOOR_TEXTURE_WIDTH;
-        final float v0 = 0.0F / DOOR_TEXTURE_HEIGHT;
-        final float v1 = 2.0F / DOOR_TEXTURE_HEIGHT;
-        final float v2 = 18.0F / DOOR_TEXTURE_HEIGHT;
+        final BakedModel model = client.getBlockRenderManager().getModel(state);
+        final VertexConsumer vertices = consumers.getBuffer(RenderLayers.getBlockLayer(state));
+        matrices.push();
+        matrices.translate(x, y, z);
+        client.getBlockRenderManager().getModelRenderer().render(
+                matrices.peek(),
+                vertices,
+                state,
+                model,
+                1.0F,
+                1.0F,
+                1.0F,
+                LightmapTextureManager.MAX_LIGHT_COORDINATE,
+                OverlayTexture.DEFAULT_UV
+        );
+        matrices.pop();
+    }
 
+    private static BlockState withProperty(BlockState state, String propertyName, String valueName) {
+        for (Property<?> property : state.getProperties()) {
+            if (!property.getName().equals(propertyName)) {
+                continue;
+            }
+            final Optional<?> parsed = property.parse(valueName);
+            if (parsed.isPresent()) {
+                return withParsedProperty(state, property, parsed.get());
+            }
+        }
+        return state;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static BlockState withParsedProperty(BlockState state, Property property, Object value) {
+        return state.with(property, (Comparable) value);
+    }
+
+    private static void renderFallbackBody(MatrixStack matrices, VertexConsumerProvider consumers) {
+        drawCuboid(matrices, consumers, FALLBACK_TEXTURE, -1.0F, 0.0F, 0.375F, 1.0F, 2.0F, 0.5F);
+    }
+
+    private static void renderFallbackHeader(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            Identifier texture
+    ) {
+        drawCuboid(matrices, consumers, texture, -1.0F, 2.0F, -0.5F, 1.0F, 3.0F, 0.5F);
+    }
+
+    private static void renderHeaderPanel(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            Identifier texture
+    ) {
         final VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(texture));
         final MatrixStack.Entry entry = matrices.peek();
         final Matrix4f positionMatrix = entry.getPositionMatrix();
         final Matrix3f normalMatrix = entry.getNormalMatrix();
 
-        /* Platform-facing surface: second 16 x 16 atlas face. */
-        quadZ(
-                vertices,
-                positionMatrix,
-                normalMatrix,
-                minX,
-                minY,
-                maxX,
-                maxY,
-                DOOR_FRONT_Z,
-                u3,
-                v1,
-                u5,
-                v2,
-                1.0F
-        );
-
-        /* Track-facing surface: first 16 x 16 atlas face, mirrored by winding. */
-        quadZ(
-                vertices,
-                positionMatrix,
-                normalMatrix,
-                maxX,
-                minY,
-                minX,
-                maxY,
-                DOOR_BACK_Z,
-                u1,
-                v1,
-                u2,
-                v2,
-                -1.0F
-        );
-
-        /* Original cuboid edge strips. */
-        quadX(
-                vertices,
-                positionMatrix,
-                normalMatrix,
-                minX,
-                minY,
-                maxY,
-                DOOR_BACK_Z,
-                DOOR_FRONT_Z,
-                u0,
-                v1,
-                u1,
-                v2,
-                -1.0F
-        );
-        quadX(
-                vertices,
-                positionMatrix,
-                normalMatrix,
-                maxX,
-                minY,
-                maxY,
-                DOOR_FRONT_Z,
-                DOOR_BACK_Z,
-                u2,
-                v1,
-                u3,
-                v2,
-                1.0F
-        );
-        quadY(
-                vertices,
-                positionMatrix,
-                normalMatrix,
-                minX,
-                maxX,
-                maxY,
-                DOOR_FRONT_Z,
-                DOOR_BACK_Z,
-                u1,
-                v0,
-                u2,
-                v1,
-                1.0F
-        );
-        quadY(
-                vertices,
-                positionMatrix,
-                normalMatrix,
-                minX,
-                maxX,
-                minY,
-                DOOR_BACK_Z,
-                DOOR_FRONT_Z,
-                u2,
-                v0,
-                u4,
-                v1,
-                -1.0F
-        );
+        quadZ(vertices, positionMatrix, normalMatrix, -1.0F, 2.0F, 1.0F, 3.0F, HEADER_FRONT_Z, 0, 0, 1, 1, 1);
+        quadZ(vertices, positionMatrix, normalMatrix, 1.0F, 2.0F, -1.0F, 3.0F, HEADER_BACK_Z, 0, 0, 1, 1, -1);
     }
 
-    /** Draws the 2 x 1 BMT route/header enclosure above the two-block door body. */
-    private static void drawHeaderEnclosure(MatrixStack matrices, VertexConsumerProvider consumers) {
-        final MatrixStack.Entry entry = matrices.peek();
-        final Matrix4f positionMatrix = entry.getPositionMatrix();
-        final Matrix3f normalMatrix = entry.getNormalMatrix();
-
-        final VertexConsumer main = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TJ_HEADER));
-        quadZ(
-                main,
-                positionMatrix,
-                normalMatrix,
-                -HALF_WIDTH,
-                HEADER_MIN_Y,
-                HALF_WIDTH,
-                HEADER_MAX_Y,
-                HEADER_FRONT_Z,
-                0,
-                0,
-                1,
-                1,
-                1
-        );
-        quadZ(
-                main,
-                positionMatrix,
-                normalMatrix,
-                HALF_WIDTH,
-                HEADER_MIN_Y,
-                -HALF_WIDTH,
-                HEADER_MAX_Y,
-                HEADER_BACK_Z,
-                0,
-                0,
-                1,
-                1,
-                -1
-        );
-
-        final VertexConsumer edges = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TJ_HEADER_EDGE));
-        quadX(
-                edges,
-                positionMatrix,
-                normalMatrix,
-                -HALF_WIDTH,
-                HEADER_MIN_Y,
-                HEADER_MAX_Y,
-                HEADER_BACK_Z,
-                HEADER_FRONT_Z,
-                0,
-                0,
-                1,
-                1,
-                -1
-        );
-        quadX(
-                edges,
-                positionMatrix,
-                normalMatrix,
-                HALF_WIDTH,
-                HEADER_MIN_Y,
-                HEADER_MAX_Y,
-                HEADER_FRONT_Z,
-                HEADER_BACK_Z,
-                0,
-                0,
-                1,
-                1,
-                1
-        );
-        quadY(
-                edges,
-                positionMatrix,
-                normalMatrix,
-                -HALF_WIDTH,
-                HALF_WIDTH,
-                HEADER_MAX_Y,
-                HEADER_FRONT_Z,
-                HEADER_BACK_Z,
-                0,
-                0,
-                1,
-                1,
-                1
-        );
-        quadY(
-                edges,
-                positionMatrix,
-                normalMatrix,
-                -HALF_WIDTH,
-                HALF_WIDTH,
-                HEADER_MIN_Y,
-                HEADER_BACK_Z,
-                HEADER_FRONT_Z,
-                0,
-                0,
-                1,
-                1,
-                -1
-        );
-    }
-
-    private static void drawFullTextureCuboid(
+    private static void drawCuboid(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
             Identifier texture,
