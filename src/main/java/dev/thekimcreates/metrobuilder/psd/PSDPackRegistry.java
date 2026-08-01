@@ -12,15 +12,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/**
- * Runtime catalog of PSD pack definitions.
- *
- * <p>The common code always exposes a built-in TJMetro pack. Client resource
- * reloads may replace or extend the catalog with JSON definitions from resource
- * packs without changing persistent world data.</p>
- */
+/** Runtime catalog of selectable PSD packs. */
 public final class PSDPackRegistry {
     public static final Identifier TJMETRO_BMT_RENDERER = MetroBuilder.id("tjmetro_bmt");
+    public static final Identifier SEOUL_BULKY_WHITE_RENDERER = MetroBuilder.id("seoul_bulky_white");
+    public static final Identifier SEOUL_BULKY_WHITE_PACK = MetroBuilder.id("seoul_bulky_white");
 
     private static final Map<Identifier, PSDPackDefinition> PACKS = new LinkedHashMap<>();
 
@@ -33,7 +29,7 @@ public final class PSDPackRegistry {
 
     public static synchronized void resetToBuiltIns() {
         PACKS.clear();
-        PACKS.put(PSDObject.DEFAULT_PACK_ID, builtInTjMetroDefault());
+        addBuiltIns(PACKS);
     }
 
     public static synchronized void replaceResourceDefinitions(
@@ -41,7 +37,7 @@ public final class PSDPackRegistry {
     ) {
         Objects.requireNonNull(definitions, "definitions");
         final Map<Identifier, PSDPackDefinition> replacements = new LinkedHashMap<>();
-        replacements.put(PSDObject.DEFAULT_PACK_ID, builtInTjMetroDefault());
+        addBuiltIns(replacements);
 
         definitions.stream()
                 .sorted(Comparator.comparing(definition -> definition.id().toString()))
@@ -78,6 +74,11 @@ public final class PSDPackRegistry {
         return definition == null ? packId.toString() : definition.displayName();
     }
 
+    private static void addBuiltIns(Map<Identifier, PSDPackDefinition> destination) {
+        destination.put(PSDObject.DEFAULT_PACK_ID, builtInTjMetroDefault());
+        destination.put(SEOUL_BULKY_WHITE_PACK, builtInSeoulBulkyWhite());
+    }
+
     private static PSDPackDefinition builtInTjMetroDefault() {
         return new PSDPackDefinition(
                 PSDObject.DEFAULT_PACK_ID,
@@ -85,6 +86,20 @@ public final class PSDPackRegistry {
                 "TJMetro BMT Default",
                 TJMETRO_BMT_RENDERER,
                 "tjmetro",
+                null,
+                null,
+                1.0F,
+                1.0F
+        );
+    }
+
+    private static PSDPackDefinition builtInSeoulBulkyWhite() {
+        return new PSDPackDefinition(
+                SEOUL_BULKY_WHITE_PACK,
+                PSDPackDefinition.CURRENT_FORMAT_VERSION,
+                "Seoul Metro Bulky White",
+                SEOUL_BULKY_WHITE_RENDERER,
+                "",
                 null,
                 null,
                 1.0F,

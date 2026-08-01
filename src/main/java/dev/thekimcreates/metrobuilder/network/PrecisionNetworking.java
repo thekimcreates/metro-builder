@@ -5,6 +5,7 @@ import dev.thekimcreates.metrobuilder.item.MetroBuilderItems;
 import dev.thekimcreates.metrobuilder.precision.PrecisionSaveData;
 import dev.thekimcreates.metrobuilder.precision.PrecisionSelectionManager;
 import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
+import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
 import dev.thekimcreates.metrobuilder.psd.PSDManager;
 import dev.thekimcreates.metrobuilder.psd.PSDObject;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
@@ -70,6 +71,7 @@ public final class PrecisionNetworking {
                 (server, player, handler, buffer, responseSender) -> {
                     final Identifier packId = buffer.readIdentifier();
                     final PrecisionTransform transform = readTransform(buffer);
+                    final PSDDisplayProperties displayProperties = readDisplayProperties(buffer);
                     server.execute(() -> {
                         if (!canUseWand(player)
                                 || !isWithinEditDistance(player, transform)) {
@@ -77,7 +79,12 @@ public final class PrecisionNetworking {
                         }
 
                         final ServerWorld world = player.getServerWorld();
-                        final PSDObject psd = PSDManager.create(world, transform, packId);
+                        final PSDObject psd = PSDManager.create(
+                                world,
+                                transform,
+                                packId,
+                                displayProperties
+                        );
                         PrecisionSelectionManager.select(player, psd.id());
                         broadcastSnapshot(world);
                         sendSelectionState(player);
@@ -118,6 +125,7 @@ public final class PrecisionNetworking {
                     final UUID objectId = buffer.readUuid();
                     final Identifier packId = buffer.readIdentifier();
                     final PrecisionTransform transform = readTransform(buffer);
+                    final PSDDisplayProperties displayProperties = readDisplayProperties(buffer);
                     server.execute(() -> {
                         if (!canUseWand(player)
                                 || !isWithinEditDistance(player, transform)) {
@@ -142,7 +150,12 @@ public final class PrecisionNetworking {
                                 objectId,
                                 packId
                         );
-                        if (transformChanged || packChanged) {
+                        final boolean displayChanged = PSDManager.updateDisplayProperties(
+                                world,
+                                objectId,
+                                displayProperties
+                        );
+                        if (transformChanged || packChanged || displayChanged) {
                             broadcastSnapshot(world);
                         }
                     });
@@ -243,6 +256,20 @@ public final class PrecisionNetworking {
                 buffer.readFloat(),
                 buffer.readFloat()
         );
+    }
+
+    public static void writeDisplayProperties(
+            PacketByteBuf buffer,
+            PSDDisplayProperties displayProperties
+    ) {
+        buffer.writeNbt(displayProperties.toNbt());
+    }
+
+    public static PSDDisplayProperties readDisplayProperties(PacketByteBuf buffer) {
+        final net.minecraft.nbt.NbtCompound nbt = buffer.readNbt();
+        return nbt == null
+                ? PSDDisplayProperties.defaults()
+                : PSDDisplayProperties.fromNbt(nbt);
     }
 
     private static boolean canUseWand(ServerPlayerEntity player) {

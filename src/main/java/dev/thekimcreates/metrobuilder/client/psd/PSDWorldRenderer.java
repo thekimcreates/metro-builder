@@ -136,8 +136,18 @@ public final class PSDWorldRenderer {
                 && Registries.BLOCK.containsId(TJ_DOOR_BLOCK)
                 && Registries.BLOCK.containsId(TJ_TOP_BLOCK);
 
-        if (canRenderTjMetro) {
+        final boolean seoulBulkyWhite = pack.rendererId()
+                .equals(PSDPackRegistry.SEOUL_BULKY_WHITE_RENDERER);
+
+        final BlockState lightState = net.minecraft.block.Blocks.WHITE_CONCRETE.getDefaultState();
+        final BlockPos lightPos = sampleWorldPos(transform, 0.0D, 1.5D, 0.0D);
+        final int assemblyLight = WorldRenderer.getLightmapCoordinates(client.world, lightState, lightPos);
+
+        if (seoulBulkyWhite) {
+            SeoulBulkyWhiteRenderer.render(client, matrices, consumers, psd, assemblyLight);
+        } else if (canRenderTjMetro) {
             renderTianjinAssembly(client, matrices, consumers, transform);
+            SeoulBulkyWhiteRenderer.renderCompanionGlass(matrices, consumers, assemblyLight);
         } else {
             if (!warnedMissingTjMetro) {
                 warnedMissingTjMetro = true;
@@ -148,13 +158,18 @@ public final class PSDWorldRenderer {
                 );
             }
             renderFallbackAssembly(client, matrices, consumers, transform);
+            SeoulBulkyWhiteRenderer.renderCompanionGlass(matrices, consumers, assemblyLight);
         }
 
         if (outlined) {
+            final double halfWidth = SeoulBulkyWhiteRenderer.HALF_WIDTH;
+            final double halfDepth = seoulBulkyWhite
+                    ? SeoulBulkyWhiteRenderer.HALF_DEPTH
+                    : 0.16D;
             WorldRenderer.drawBox(
                     matrices,
                     consumers.getBuffer(RenderLayer.getLines()),
-                    new Box(-1.0D, 0.0D, -0.16D, 1.0D, 3.0D, 0.16D),
+                    new Box(-halfWidth, 0.0D, -halfDepth, halfWidth, 3.0D, halfDepth),
                     1.0F,
                     1.0F,
                     1.0F,

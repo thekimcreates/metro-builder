@@ -67,7 +67,13 @@ public final class ClientPrecisionState {
     ) {
         psds = psds.stream()
                 .map(psd -> psd.id().equals(objectId)
-                        ? new ClientPSDObject(psd.id(), transform, psd.packId(), psd.doorValue())
+                        ? new ClientPSDObject(
+                                psd.id(),
+                                transform,
+                                psd.packId(),
+                                psd.doorValue(),
+                                psd.displayProperties()
+                        )
                         : psd)
                 .toList();
     }
@@ -75,11 +81,18 @@ public final class ClientPrecisionState {
     public static synchronized void updatePsdProperties(
             UUID objectId,
             net.minecraft.util.Identifier packId,
-            dev.thekimcreates.metrobuilder.precision.PrecisionTransform transform
+            dev.thekimcreates.metrobuilder.precision.PrecisionTransform transform,
+            dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties displayProperties
     ) {
         psds = psds.stream()
                 .map(psd -> psd.id().equals(objectId)
-                        ? new ClientPSDObject(psd.id(), transform, packId, psd.doorValue())
+                        ? new ClientPSDObject(
+                                psd.id(),
+                                transform,
+                                packId,
+                                psd.doorValue(),
+                                displayProperties
+                        )
                         : psd)
                 .toList();
     }

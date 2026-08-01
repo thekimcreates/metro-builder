@@ -3,6 +3,7 @@ package dev.thekimcreates.metrobuilder.client.network;
 import dev.thekimcreates.metrobuilder.MetroBuilder;
 import dev.thekimcreates.metrobuilder.network.PrecisionNetworking;
 import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
+import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
@@ -74,10 +75,15 @@ public final class PrecisionClientNetworking {
         ClientPlayNetworking.send(PrecisionNetworking.SELECTION_REQUEST, buffer);
     }
 
-    public static void placePsd(Identifier packId, PrecisionTransform transform) {
+    public static void placePsd(
+            Identifier packId,
+            PrecisionTransform transform,
+            PSDDisplayProperties displayProperties
+    ) {
         final PacketByteBuf buffer = PacketByteBufs.create();
         buffer.writeIdentifier(packId);
         PrecisionNetworking.writeTransform(buffer, transform);
+        PrecisionNetworking.writeDisplayProperties(buffer, displayProperties);
         ClientPlayNetworking.send(PrecisionNetworking.PSD_PLACE, buffer);
     }
 
@@ -91,12 +97,14 @@ public final class PrecisionClientNetworking {
     public static void updatePsdProperties(
             UUID objectId,
             Identifier packId,
-            PrecisionTransform transform
+            PrecisionTransform transform,
+            PSDDisplayProperties displayProperties
     ) {
         final PacketByteBuf buffer = PacketByteBufs.create();
         buffer.writeUuid(objectId);
         buffer.writeIdentifier(packId);
         PrecisionNetworking.writeTransform(buffer, transform);
+        PrecisionNetworking.writeDisplayProperties(buffer, displayProperties);
         ClientPlayNetworking.send(PrecisionNetworking.PSD_UPDATE_PROPERTIES, buffer);
     }
 

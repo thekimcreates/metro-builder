@@ -6,7 +6,9 @@ import dev.thekimcreates.metrobuilder.client.psd.ClientPSDObject;
 import dev.thekimcreates.metrobuilder.client.screen.PSDPropertiesScreen;
 import dev.thekimcreates.metrobuilder.item.MetroBuilderItems;
 import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
+import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
 import dev.thekimcreates.metrobuilder.psd.PSDObject;
+import dev.thekimcreates.metrobuilder.psd.PSDPackRegistry;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -106,7 +108,8 @@ public final class BuilderWandClientController {
                 PENDING_PREVIEW_ID,
                 pending.transform,
                 pending.packId,
-                0.0D
+                0.0D,
+                pending.displayProperties
         ));
     }
 
@@ -128,9 +131,14 @@ public final class BuilderWandClientController {
                     confirmed.transform.roll(),
                     confirmed.transform.scaleX(),
                     confirmed.transform.scaleY(),
-                    confirmed.transform.scaleZ()
+                    confirmed.transform.scaleZ(),
+                    confirmed.displayProperties
             );
-            PrecisionClientNetworking.placePsd(confirmed.packId, confirmed.transform);
+            PrecisionClientNetworking.placePsd(
+                    confirmed.packId,
+                    confirmed.transform,
+                    confirmed.displayProperties
+            );
             pending = null;
             return;
         }
@@ -156,7 +164,8 @@ public final class BuilderWandClientController {
                         template.scaleX,
                         template.scaleY,
                         template.scaleZ
-                )
+                ),
+                template.displayProperties
         );
         PrecisionClientNetworking.requestSelectionClear();
         client.player.sendMessage(
@@ -229,7 +238,11 @@ public final class BuilderWandClientController {
         }
         ClientPrecisionState.findPsd(selectedId.get()).ifPresent(psd -> {
             final PrecisionTransform updated = operation.apply(psd.transform());
-            lastPlacedTemplate = PSDTemplate.from(psd.packId(), updated);
+            lastPlacedTemplate = PSDTemplate.from(
+                    psd.packId(),
+                    updated,
+                    psd.displayProperties()
+            );
             ClientPrecisionState.updatePsdTransform(psd.id(), updated);
             PrecisionClientNetworking.updatePsdTransform(psd.id(), updated);
         });
@@ -242,9 +255,18 @@ public final class BuilderWandClientController {
                     "Pending PSD",
                     openedPending.packId,
                     openedPending.transform,
-                    (updatedPackId, updatedTransform) -> pending = pending == null
-                            ? openedPending.withProperties(updatedPackId, updatedTransform)
-                            : pending.withProperties(updatedPackId, updatedTransform)
+                    openedPending.displayProperties,
+                    (updatedPackId, updatedTransform, updatedDisplayProperties) -> pending = pending == null
+                            ? openedPending.withProperties(
+                                    updatedPackId,
+                                    updatedTransform,
+                                    updatedDisplayProperties
+                            )
+                            : pending.withProperties(
+                                    updatedPackId,
+                                    updatedTransform,
+                                    updatedDisplayProperties
+                            )
             ));
             return;
         }
@@ -266,19 +288,34 @@ public final class BuilderWandClientController {
                 "PSD Properties",
                 psd.packId(),
                 psd.transform(),
-                (updatedPackId, updatedTransform) -> {
-                    lastPlacedTemplate = PSDTemplate.from(updatedPackId, updatedTransform);
-                    ClientPrecisionState.updatePsdProperties(psd.id(), updatedPackId, updatedTransform);
+                psd.displayProperties(),
+                (updatedPackId, updatedTransform, updatedDisplayProperties) -> {
+                    lastPlacedTemplate = PSDTemplate.from(
+                            updatedPackId,
+                            updatedTransform,
+                            updatedDisplayProperties
+                    );
+                    ClientPrecisionState.updatePsdProperties(
+                            psd.id(),
+                            updatedPackId,
+                            updatedTransform,
+                            updatedDisplayProperties
+                    );
                     PrecisionClientNetworking.updatePsdProperties(
                             psd.id(),
                             updatedPackId,
-                            updatedTransform
+                            updatedTransform,
+                            updatedDisplayProperties
                     );
                 },
                 () -> {
                     // Keep the deleted PSD's properties as the template for the
                     // next newly-created pending PSD.
-                    lastPlacedTemplate = PSDTemplate.from(psd.packId(), psd.transform());
+                    lastPlacedTemplate = PSDTemplate.from(
+                            psd.packId(),
+                            psd.transform(),
+                            psd.displayProperties()
+                    );
                     ClientPrecisionState.removePsd(psd.id());
                     PrecisionClientNetworking.deletePsd(psd.id());
                 }
@@ -294,17 +331,18 @@ public final class BuilderWandClientController {
         final Vec3d rayEnd = rayStart.add(client.player.getRotationVec(1.0F).multiply(RAYCAST_DISTANCE));
 
         return ClientPrecisionState.psds().stream()
-                .map(psd -> new Target(psd, intersectionDistance(psd.transform(), rayStart, rayEnd)))
+                .map(psd -> new Target(psd, intersectionDistance(psd, rayStart, rayEnd)))
                 .filter(target -> Double.isFinite(target.distance))
                 .min(Comparator.comparingDouble(Target::distance))
                 .map(Target::psd);
     }
 
     private static double intersectionDistance(
-            PrecisionTransform transform,
+            ClientPSDObject psd,
             Vec3d worldStart,
             Vec3d worldEnd
     ) {
+        final PrecisionTransform transform = psd.transform();
         final Vec3d localStart = worldToLocal(transform, worldStart);
         final Vec3d localEnd = worldToLocal(transform, worldEnd);
         final Vec3d direction = localEnd.subtract(localStart);
@@ -313,8 +351,12 @@ public final class BuilderWandClientController {
         double maximum = 1.0D;
         final double[] start = {localStart.x, localStart.y, localStart.z};
         final double[] delta = {direction.x, direction.y, direction.z};
-        final double[] boundsMin = {-1.0D, 0.0D, -0.20D};
-        final double[] boundsMax = {1.0D, 3.0D, 0.20D};
+        final boolean seoul = PSDPackRegistry.resolve(psd.packId()).rendererId()
+                .equals(PSDPackRegistry.SEOUL_BULKY_WHITE_RENDERER);
+        final double halfWidth = 2.5D;
+        final double depth = seoul ? 0.28D : 0.20D;
+        final double[] boundsMin = {-halfWidth, 0.0D, -depth};
+        final double[] boundsMax = {halfWidth, 3.0D, depth};
 
         for (int axis = 0; axis < 3; axis++) {
             if (Math.abs(delta[axis]) < 1.0E-8D) {
@@ -395,16 +437,21 @@ public final class BuilderWandClientController {
         return normalized < 0.0F ? normalized + 360.0F : normalized;
     }
 
-    private record PendingPSD(net.minecraft.util.Identifier packId, PrecisionTransform transform) {
+    private record PendingPSD(
+            net.minecraft.util.Identifier packId,
+            PrecisionTransform transform,
+            PSDDisplayProperties displayProperties
+    ) {
         private PendingPSD withTransform(PrecisionTransform updatedTransform) {
-            return new PendingPSD(packId, updatedTransform);
+            return new PendingPSD(packId, updatedTransform, displayProperties);
         }
 
         private PendingPSD withProperties(
                 net.minecraft.util.Identifier updatedPackId,
-                PrecisionTransform updatedTransform
+                PrecisionTransform updatedTransform,
+                PSDDisplayProperties updatedDisplayProperties
         ) {
-            return new PendingPSD(updatedPackId, updatedTransform);
+            return new PendingPSD(updatedPackId, updatedTransform, updatedDisplayProperties);
         }
     }
 
@@ -415,7 +462,8 @@ public final class BuilderWandClientController {
             float roll,
             float scaleX,
             float scaleY,
-            float scaleZ
+            float scaleZ,
+            PSDDisplayProperties displayProperties
     ) {
         private static PSDTemplate defaultFor(float yaw) {
             return new PSDTemplate(
@@ -425,13 +473,15 @@ public final class BuilderWandClientController {
                     0.0F,
                     1.0F,
                     1.0F,
-                    1.0F
+                    1.0F,
+                    PSDDisplayProperties.defaults()
             );
         }
 
         private static PSDTemplate from(
                 net.minecraft.util.Identifier packId,
-                PrecisionTransform transform
+                PrecisionTransform transform,
+                PSDDisplayProperties displayProperties
         ) {
             return new PSDTemplate(
                     packId,
@@ -440,7 +490,8 @@ public final class BuilderWandClientController {
                     transform.roll(),
                     transform.scaleX(),
                     transform.scaleY(),
-                    transform.scaleZ()
+                    transform.scaleZ(),
+                    displayProperties
             );
         }
     }

@@ -28,10 +28,20 @@ public final class PSDManager {
             PrecisionTransform transform,
             Identifier packId
     ) {
+        return create(world, transform, packId, PSDDisplayProperties.defaults());
+    }
+
+    public static PSDObject create(
+            ServerWorld world,
+            PrecisionTransform transform,
+            Identifier packId,
+            PSDDisplayProperties displayProperties
+    ) {
         Objects.requireNonNull(world, "world");
         final PSDObject object = PSDObject.create(
                 Objects.requireNonNull(transform, "transform"),
-                Objects.requireNonNull(packId, "packId")
+                Objects.requireNonNull(packId, "packId"),
+                Objects.requireNonNull(displayProperties, "displayProperties")
         );
         precisionManager(world).add(object);
         return object;
@@ -83,6 +93,40 @@ public final class PSDManager {
 
         final Optional<PSDObject> object = find(world, objectId);
         if (object.isEmpty() || !object.get().replacePackId(packId)) {
+            return false;
+        }
+        precisionManager(world).markObjectChanged(objectId);
+        return true;
+    }
+
+
+    public static boolean updateDisplayProperties(
+            ServerWorld world,
+            UUID objectId,
+            PSDDisplayProperties displayProperties
+    ) {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(objectId, "objectId");
+        Objects.requireNonNull(displayProperties, "displayProperties");
+
+        final Optional<PSDObject> object = find(world, objectId);
+        if (object.isEmpty() || !object.get().replaceDisplayProperties(displayProperties)) {
+            return false;
+        }
+        precisionManager(world).markObjectChanged(objectId);
+        return true;
+    }
+
+    public static boolean updateDoorValue(
+            ServerWorld world,
+            UUID objectId,
+            double doorValue
+    ) {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(objectId, "objectId");
+
+        final Optional<PSDObject> object = find(world, objectId);
+        if (object.isEmpty() || !object.get().replaceDoorValue(doorValue)) {
             return false;
         }
         precisionManager(world).markObjectChanged(objectId);

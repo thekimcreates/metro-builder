@@ -13,20 +13,24 @@ import net.minecraft.world.World;
 
 import java.util.List;
 
-/**
- * MetroBuilder's single unified precision-editing wand.
- *
- * <p>All placement and editing input is handled by the client controller and
- * validated by server networking. The item deliberately contains no mode
- * state and performs no direct world mutation.</p>
- */
+/** The single, mode-free MetroBuilder precision PSD editing tool. */
 public final class BuilderWandItem extends Item {
     public BuilderWandItem(Settings settings) {
         super(settings.maxCount(1));
     }
 
+    /** Client input and server-authoritative packets are handled by the wand controller. */
     @Override
     public ActionResult useOnBlock(ItemUsageContext context) {
+        if (context.getPlayer() != null && !context.getPlayer().isCreative()) {
+            if (context.getWorld().isClient) {
+                context.getPlayer().sendMessage(
+                        Text.translatable("message.metrobuilder.creative_only"),
+                        true
+                );
+            }
+            return ActionResult.FAIL;
+        }
         return ActionResult.SUCCESS;
     }
 
@@ -36,7 +40,14 @@ public final class BuilderWandItem extends Item {
             net.minecraft.entity.player.PlayerEntity user,
             Hand hand
     ) {
-        return TypedActionResult.success(user.getStackInHand(hand), world.isClient);
+        final ItemStack stack = user.getStackInHand(hand);
+        if (!user.isCreative()) {
+            if (world.isClient) {
+                user.sendMessage(Text.translatable("message.metrobuilder.creative_only"), true);
+            }
+            return TypedActionResult.fail(stack);
+        }
+        return TypedActionResult.success(stack, world.isClient);
     }
 
     @Override
@@ -48,7 +59,7 @@ public final class BuilderWandItem extends Item {
     ) {
         tooltip.add(Text.translatable("item.metrobuilder.builder_wand.tooltip")
                 .formatted(Formatting.GRAY));
-        tooltip.add(Text.translatable("item.metrobuilder.builder_wand.tooltip.controls")
+        tooltip.add(Text.translatable("item.metrobuilder.builder_wand.tooltip.place")
                 .formatted(Formatting.DARK_GRAY));
     }
 }

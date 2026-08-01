@@ -9,46 +9,52 @@ import net.minecraft.util.Identifier;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * One persistent precision platform-screen-door object.
- *
- * <p>Milestone 3.1 stores the PSD's identity and data only. Rendering and Builder Wand
- * placement are intentionally added in later Milestone 3 commits.</p>
- */
+/** One persistent precision platform-screen-door assembly. */
 public final class PSDObject extends PrecisionObject {
     public static final Identifier DEFAULT_PACK_ID = MetroBuilder.id("tjmetro_default");
 
     private static final String PACK_ID_KEY = "PackId";
     private static final String DOOR_VALUE_KEY = "DoorValue";
+    private static final String DISPLAY_PROPERTIES_KEY = "DisplayProperties";
 
     private Identifier packId;
-    private final double doorValue;
+    private double doorValue;
+    private PSDDisplayProperties displayProperties;
 
     private PSDObject(
             UUID id,
             PrecisionTransform transform,
             long revision,
             Identifier packId,
-            double doorValue
+            double doorValue,
+            PSDDisplayProperties displayProperties
     ) {
         super(PSDTypes.PSD, id, transform, revision);
         this.packId = Objects.requireNonNull(packId, "packId");
         this.doorValue = validateDoorValue(doorValue);
+        this.displayProperties = Objects.requireNonNull(displayProperties, "displayProperties");
     }
 
-    /** Creates a new closed PSD using the built-in TJMetro-default pack reference. */
     public static PSDObject create(PrecisionTransform transform) {
-        return create(transform, DEFAULT_PACK_ID);
+        return create(transform, DEFAULT_PACK_ID, PSDDisplayProperties.defaults());
     }
 
-    /** Creates a new closed PSD using the requested pack reference. */
     public static PSDObject create(PrecisionTransform transform, Identifier packId) {
+        return create(transform, packId, PSDDisplayProperties.defaults());
+    }
+
+    public static PSDObject create(
+            PrecisionTransform transform,
+            Identifier packId,
+            PSDDisplayProperties displayProperties
+    ) {
         return new PSDObject(
                 UUID.randomUUID(),
                 Objects.requireNonNull(transform, "transform"),
                 0L,
                 Objects.requireNonNull(packId, "packId"),
-                0.0
+                0.0D,
+                Objects.requireNonNull(displayProperties, "displayProperties")
         );
     }
 
@@ -64,7 +70,10 @@ public final class PSDObject extends PrecisionObject {
                 Objects.requireNonNull(transform, "transform"),
                 revision,
                 readPackId(data),
-                data.contains(DOOR_VALUE_KEY) ? data.getDouble(DOOR_VALUE_KEY) : 0.0
+                data.contains(DOOR_VALUE_KEY) ? data.getDouble(DOOR_VALUE_KEY) : 0.0D,
+                data.contains(DISPLAY_PROPERTIES_KEY)
+                        ? PSDDisplayProperties.fromNbt(data.getCompound(DISPLAY_PROPERTIES_KEY))
+                        : PSDDisplayProperties.defaults()
         );
     }
 
@@ -82,15 +91,39 @@ public final class PSDObject extends PrecisionObject {
         return true;
     }
 
-    /** Door animation value reserved for Beta 2 synchronization: 0 = closed, 1 = open. */
     public double doorValue() {
         return doorValue;
+    }
+
+    boolean replaceDoorValue(double newDoorValue) {
+        final double validated = validateDoorValue(newDoorValue);
+        if (Double.compare(doorValue, validated) == 0) {
+            return false;
+        }
+        doorValue = validated;
+        markRevised();
+        return true;
+    }
+
+    public PSDDisplayProperties displayProperties() {
+        return displayProperties;
+    }
+
+    boolean replaceDisplayProperties(PSDDisplayProperties newProperties) {
+        Objects.requireNonNull(newProperties, "newProperties");
+        if (displayProperties.equals(newProperties)) {
+            return false;
+        }
+        displayProperties = newProperties;
+        markRevised();
+        return true;
     }
 
     @Override
     protected void writeData(NbtCompound data) {
         data.putString(PACK_ID_KEY, packId.toString());
         data.putDouble(DOOR_VALUE_KEY, doorValue);
+        data.put(DISPLAY_PROPERTIES_KEY, displayProperties.toNbt());
     }
 
     private static Identifier readPackId(NbtCompound data) {
@@ -111,11 +144,8 @@ public final class PSDObject extends PrecisionObject {
     }
 
     private static double validateDoorValue(double value) {
-        if (!Double.isFinite(value)) {
-            throw new IllegalArgumentException("doorValue must be finite");
-        }
-        if (value < 0.0 || value > 1.0) {
-            throw new IllegalArgumentException("doorValue must be between 0 and 1");
+        if (!Double.isFinite(value) || value < 0.0D || value > 1.0D) {
+            throw new IllegalArgumentException("doorValue must be finite and between 0 and 1");
         }
         return value;
     }
