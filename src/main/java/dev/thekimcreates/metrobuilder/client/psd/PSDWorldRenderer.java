@@ -19,30 +19,47 @@ import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
-/** Renders synchronized PSD precision objects directly into the client world. */
+/** Renders synchronized precision PSD objects directly into the client world. */
 public final class PSDWorldRenderer {
     private static final double MAX_RENDER_DISTANCE = 192.0D;
     private static final double MAX_RENDER_DISTANCE_SQUARED = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE;
 
     /*
-     * The assembled PSD is exactly 2 blocks wide and 3 blocks tall:
-     * - Four 1 x 1 door-leaf cuboids form a 2 x 2 door body.
-     * - One 2 x 1 header cuboid occupies the third block of height.
+     * TJMetro BMT proportions, matching the supplied in-game reference:
+     * - total width: 2 blocks
+     * - total height: 3 blocks
+     * - glass door body: 2 blocks tall
+     * - route/header enclosure: 1 block tall
      */
     private static final float HALF_WIDTH = 1.0F;
     private static final float DOOR_BODY_HEIGHT = 2.0F;
     private static final float HEADER_MIN_Y = 2.0F;
     private static final float HEADER_MAX_Y = 3.0F;
 
-    /* Matches TJMetro's MODEL_PSD depth of 2 texture/model units (2 / 16 block). */
-    private static final float DOOR_HALF_DEPTH = 1.0F / 16.0F;
-    private static final float HEADER_HALF_DEPTH = 5.0F / 16.0F;
+    /*
+     * TJMetro's ModelSingleCube is not centered in the block. Its 2/16-deep
+     * door leaves sit against the platform-facing side of the block. Keeping
+     * that offset is essential to reproduce the real PSD silhouette.
+     */
+    private static final float DOOR_BACK_Z = 6.0F / 16.0F;
+    private static final float DOOR_FRONT_Z = 8.0F / 16.0F;
+
+    /* The BMT top enclosure projects behind the door while sharing its front face. */
+    private static final float HEADER_BACK_Z = -2.0F / 16.0F;
+    private static final float HEADER_FRONT_Z = 8.0F / 16.0F;
+
+    /* Dark lower fascia visible beneath the BMT header in the real model. */
+    private static final float FASCIA_MIN_Y = 1.9375F;
+    private static final float FASCIA_MAX_Y = 2.0625F;
+    private static final float FASCIA_BACK_Z = 4.75F / 16.0F;
+    private static final float FASCIA_FRONT_Z = 8.25F / 16.0F;
 
     /* TJMetro's door cuboid declares a logical texture size of 36 x 18. */
     private static final float DOOR_TEXTURE_WIDTH = 36.0F;
     private static final float DOOR_TEXTURE_HEIGHT = 18.0F;
 
     private static final Identifier FALLBACK_TEXTURE = new Identifier("minecraft", "textures/block/iron_block.png");
+    private static final Identifier BLACK_TEXTURE = new Identifier("minecraft", "textures/block/black_concrete.png");
     private static final Identifier TJ_BOTTOM_LEFT = new Identifier(
             "tjmetro",
             "textures/block/psd_door_tianjin_bottom_left.png"
@@ -124,16 +141,24 @@ public final class PSDWorldRenderer {
         matrices.scale(transform.scaleX(), transform.scaleY(), transform.scaleZ());
 
         if (FabricLoader.getInstance().isModLoaded("tjmetro")) {
-            /*
-             * Each TJMetro door texture is a cuboid atlas, not a flat full-face image.
-             * Reproducing the original 36 x 18 cuboid UV layout fixes the stretched,
-             * duplicated, and transparent-looking textures from the first renderer.
-             */
-            drawDoorLeafCuboid(matrices, consumers, TJ_BOTTOM_LEFT, -HALF_WIDTH, 0.0F, 0.0F, 1.0F);
-            drawDoorLeafCuboid(matrices, consumers, TJ_BOTTOM_RIGHT, 0.0F, 0.0F, HALF_WIDTH, 1.0F);
-            drawDoorLeafCuboid(matrices, consumers, TJ_TOP_LEFT, -HALF_WIDTH, 1.0F, 0.0F, DOOR_BODY_HEIGHT);
-            drawDoorLeafCuboid(matrices, consumers, TJ_TOP_RIGHT, 0.0F, 1.0F, HALF_WIDTH, DOOR_BODY_HEIGHT);
-            drawHeaderCuboid(matrices, consumers);
+            /* Four 1 x 1 TJMetro door sections form the exact 2 x 2 lower body. */
+            drawDoorSection(matrices, consumers, TJ_BOTTOM_LEFT, -HALF_WIDTH, 0.0F, 0.0F, 1.0F);
+            drawDoorSection(matrices, consumers, TJ_BOTTOM_RIGHT, 0.0F, 0.0F, HALF_WIDTH, 1.0F);
+            drawDoorSection(matrices, consumers, TJ_TOP_LEFT, -HALF_WIDTH, 1.0F, 0.0F, DOOR_BODY_HEIGHT);
+            drawDoorSection(matrices, consumers, TJ_TOP_RIGHT, 0.0F, 1.0F, HALF_WIDTH, DOOR_BODY_HEIGHT);
+
+            drawHeaderEnclosure(matrices, consumers);
+            drawFullTextureCuboid(
+                    matrices,
+                    consumers,
+                    BLACK_TEXTURE,
+                    -HALF_WIDTH,
+                    FASCIA_MIN_Y,
+                    FASCIA_BACK_Z,
+                    HALF_WIDTH,
+                    FASCIA_MAX_Y,
+                    FASCIA_FRONT_Z
+            );
         } else {
             drawFullTextureCuboid(
                     matrices,
@@ -141,10 +166,10 @@ public final class PSDWorldRenderer {
                     FALLBACK_TEXTURE,
                     -HALF_WIDTH,
                     0.0F,
-                    -DOOR_HALF_DEPTH,
+                    DOOR_BACK_Z,
                     HALF_WIDTH,
                     DOOR_BODY_HEIGHT,
-                    DOOR_HALF_DEPTH
+                    DOOR_FRONT_Z
             );
             drawFullTextureCuboid(
                     matrices,
@@ -152,18 +177,25 @@ public final class PSDWorldRenderer {
                     FALLBACK_TEXTURE,
                     -HALF_WIDTH,
                     HEADER_MIN_Y,
-                    -HEADER_HALF_DEPTH,
+                    HEADER_BACK_Z,
                     HALF_WIDTH,
                     HEADER_MAX_Y,
-                    HEADER_HALF_DEPTH
+                    HEADER_FRONT_Z
             );
         }
 
         matrices.pop();
     }
 
-    /** Draws one 1 x 1 x 0.125 TJMetro door section with the original cuboid-atlas UVs. */
-    private static void drawDoorLeafCuboid(
+    /**
+     * Draws one 1 x 1 x 0.125 TJMetro door section.
+     *
+     * The supplied PNG is a 36 x 18 logical cuboid atlas stored at 2x pixel
+     * resolution. The platform-facing surface corresponds to the atlas's
+     * second 16 x 16 face. Using that face restores the gray threshold, thick
+     * black mullions, and clear glass arrangement visible in TJMetro.
+     */
+    private static void drawDoorSection(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
             Identifier texture,
@@ -172,10 +204,6 @@ public final class PSDWorldRenderer {
             float maxX,
             float maxY
     ) {
-        final float minZ = -DOOR_HALF_DEPTH;
-        final float maxZ = DOOR_HALF_DEPTH;
-
-        /* Standard ModelPart cuboid net for 16 x 16 x 2 on a logical 36 x 18 texture. */
         final float u0 = 0.0F / DOOR_TEXTURE_WIDTH;
         final float u1 = 2.0F / DOOR_TEXTURE_WIDTH;
         final float u2 = 18.0F / DOOR_TEXTURE_WIDTH;
@@ -191,42 +219,202 @@ public final class PSDWorldRenderer {
         final Matrix4f positionMatrix = entry.getPositionMatrix();
         final Matrix3f normalMatrix = entry.getNormalMatrix();
 
-        /* Front (+Z): logical atlas region x=2..18, y=2..18. */
-        quadZ(vertices, positionMatrix, normalMatrix, minX, minY, maxX, maxY, maxZ, u1, v1, u2, v2, 1.0F);
-        /* Back (-Z): logical atlas region x=20..36, y=2..18. */
-        quadZ(vertices, positionMatrix, normalMatrix, maxX, minY, minX, maxY, minZ, u3, v1, u5, v2, -1.0F);
-        /* Left (-X): x=0..2, y=2..18. */
-        quadX(vertices, positionMatrix, normalMatrix, minX, minY, maxY, minZ, maxZ, u0, v1, u1, v2, -1.0F);
-        /* Right (+X): x=18..20, y=2..18. */
-        quadX(vertices, positionMatrix, normalMatrix, maxX, minY, maxY, maxZ, minZ, u2, v1, u3, v2, 1.0F);
-        /* Top (+Y): x=2..18, y=0..2. */
-        quadY(vertices, positionMatrix, normalMatrix, minX, maxX, maxY, maxZ, minZ, u1, v0, u2, v1, 1.0F);
-        /* Bottom (-Y): x=18..34, y=0..2. */
-        quadY(vertices, positionMatrix, normalMatrix, minX, maxX, minY, minZ, maxZ, u2, v0, u4, v1, -1.0F);
+        /* Platform-facing surface: second 16 x 16 atlas face. */
+        quadZ(
+                vertices,
+                positionMatrix,
+                normalMatrix,
+                minX,
+                minY,
+                maxX,
+                maxY,
+                DOOR_FRONT_Z,
+                u3,
+                v1,
+                u5,
+                v2,
+                1.0F
+        );
+
+        /* Track-facing surface: first 16 x 16 atlas face, mirrored by winding. */
+        quadZ(
+                vertices,
+                positionMatrix,
+                normalMatrix,
+                maxX,
+                minY,
+                minX,
+                maxY,
+                DOOR_BACK_Z,
+                u1,
+                v1,
+                u2,
+                v2,
+                -1.0F
+        );
+
+        /* Original cuboid edge strips. */
+        quadX(
+                vertices,
+                positionMatrix,
+                normalMatrix,
+                minX,
+                minY,
+                maxY,
+                DOOR_BACK_Z,
+                DOOR_FRONT_Z,
+                u0,
+                v1,
+                u1,
+                v2,
+                -1.0F
+        );
+        quadX(
+                vertices,
+                positionMatrix,
+                normalMatrix,
+                maxX,
+                minY,
+                maxY,
+                DOOR_FRONT_Z,
+                DOOR_BACK_Z,
+                u2,
+                v1,
+                u3,
+                v2,
+                1.0F
+        );
+        quadY(
+                vertices,
+                positionMatrix,
+                normalMatrix,
+                minX,
+                maxX,
+                maxY,
+                DOOR_FRONT_Z,
+                DOOR_BACK_Z,
+                u1,
+                v0,
+                u2,
+                v1,
+                1.0F
+        );
+        quadY(
+                vertices,
+                positionMatrix,
+                normalMatrix,
+                minX,
+                maxX,
+                minY,
+                DOOR_BACK_Z,
+                DOOR_FRONT_Z,
+                u2,
+                v0,
+                u4,
+                v1,
+                -1.0F
+        );
     }
 
-    /** Draws the full 2 x 1 x 0.625 BMT header, completing the exact 2 x 3 silhouette. */
-    private static void drawHeaderCuboid(MatrixStack matrices, VertexConsumerProvider consumers) {
+    /** Draws the 2 x 1 BMT route/header enclosure above the two-block door body. */
+    private static void drawHeaderEnclosure(MatrixStack matrices, VertexConsumerProvider consumers) {
         final MatrixStack.Entry entry = matrices.peek();
         final Matrix4f positionMatrix = entry.getPositionMatrix();
         final Matrix3f normalMatrix = entry.getNormalMatrix();
 
-        final float minX = -HALF_WIDTH;
-        final float maxX = HALF_WIDTH;
-        final float minY = HEADER_MIN_Y;
-        final float maxY = HEADER_MAX_Y;
-        final float minZ = -HEADER_HALF_DEPTH;
-        final float maxZ = HEADER_HALF_DEPTH;
-
         final VertexConsumer main = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TJ_HEADER));
-        quadZ(main, positionMatrix, normalMatrix, minX, minY, maxX, maxY, maxZ, 0, 0, 1, 1, 1);
-        quadZ(main, positionMatrix, normalMatrix, maxX, minY, minX, maxY, minZ, 0, 0, 1, 1, -1);
-        quadY(main, positionMatrix, normalMatrix, minX, maxX, maxY, maxZ, minZ, 0, 0, 1, 1, 1);
-        quadY(main, positionMatrix, normalMatrix, minX, maxX, minY, minZ, maxZ, 0, 0, 1, 1, -1);
+        quadZ(
+                main,
+                positionMatrix,
+                normalMatrix,
+                -HALF_WIDTH,
+                HEADER_MIN_Y,
+                HALF_WIDTH,
+                HEADER_MAX_Y,
+                HEADER_FRONT_Z,
+                0,
+                0,
+                1,
+                1,
+                1
+        );
+        quadZ(
+                main,
+                positionMatrix,
+                normalMatrix,
+                HALF_WIDTH,
+                HEADER_MIN_Y,
+                -HALF_WIDTH,
+                HEADER_MAX_Y,
+                HEADER_BACK_Z,
+                0,
+                0,
+                1,
+                1,
+                -1
+        );
 
         final VertexConsumer edges = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TJ_HEADER_EDGE));
-        quadX(edges, positionMatrix, normalMatrix, minX, minY, maxY, minZ, maxZ, 0, 0, 1, 1, -1);
-        quadX(edges, positionMatrix, normalMatrix, maxX, minY, maxY, maxZ, minZ, 0, 0, 1, 1, 1);
+        quadX(
+                edges,
+                positionMatrix,
+                normalMatrix,
+                -HALF_WIDTH,
+                HEADER_MIN_Y,
+                HEADER_MAX_Y,
+                HEADER_BACK_Z,
+                HEADER_FRONT_Z,
+                0,
+                0,
+                1,
+                1,
+                -1
+        );
+        quadX(
+                edges,
+                positionMatrix,
+                normalMatrix,
+                HALF_WIDTH,
+                HEADER_MIN_Y,
+                HEADER_MAX_Y,
+                HEADER_FRONT_Z,
+                HEADER_BACK_Z,
+                0,
+                0,
+                1,
+                1,
+                1
+        );
+        quadY(
+                edges,
+                positionMatrix,
+                normalMatrix,
+                -HALF_WIDTH,
+                HALF_WIDTH,
+                HEADER_MAX_Y,
+                HEADER_FRONT_Z,
+                HEADER_BACK_Z,
+                0,
+                0,
+                1,
+                1,
+                1
+        );
+        quadY(
+                edges,
+                positionMatrix,
+                normalMatrix,
+                -HALF_WIDTH,
+                HALF_WIDTH,
+                HEADER_MIN_Y,
+                HEADER_BACK_Z,
+                HEADER_FRONT_Z,
+                0,
+                0,
+                1,
+                1,
+                -1
+        );
     }
 
     private static void drawFullTextureCuboid(
