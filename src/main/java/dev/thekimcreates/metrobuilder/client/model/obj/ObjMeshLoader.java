@@ -19,16 +19,16 @@ final class ObjMeshLoader {
     }
 
     static ObjMesh load(ResourceManager resourceManager, Identifier resourceId) throws IOException {
-        final Resource resource = resourceManager.getResource(resourceId)
-                .orElseThrow(() -> new IOException("Missing OBJ resource " + resourceId));
+Resource resource = resourceManager.getResource(resourceId)
+        .orElseThrow(() -> new FileNotFoundException(resourceId.toString()));
 
 try (InputStream stream = resource.getInputStream();
-     BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
-                     resource.getInputStream(),
-                     StandardCharsets.UTF_8
-             ))) {
-            return parse(reader, resourceId);
-        }
+     BufferedReader reader = new BufferedReader(
+             new InputStreamReader(stream, StandardCharsets.UTF_8)
+     )) {
+
+    return parse(reader, resourceId);
+}
     }
 
     private static ObjMesh parse(BufferedReader reader, Identifier resourceId) throws IOException {
