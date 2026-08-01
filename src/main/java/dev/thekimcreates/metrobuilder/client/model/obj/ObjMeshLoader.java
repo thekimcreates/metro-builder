@@ -22,8 +22,8 @@ final class ObjMeshLoader {
         final Resource resource = resourceManager.getResource(resourceId)
                 .orElseThrow(() -> new IOException("Missing OBJ resource " + resourceId));
 
-        try (resource;
-             BufferedReader reader = new BufferedReader(new InputStreamReader(
+try (InputStream stream = resource.getInputStream();
+     BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
                      resource.getInputStream(),
                      StandardCharsets.UTF_8
              ))) {
