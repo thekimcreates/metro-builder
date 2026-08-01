@@ -324,17 +324,6 @@ final class SeoulBulkyWhiteRenderer {
                     light
             );
         }
-        if (!properties.lineNumber().isBlank()) {
-            renderBadgeText(
-                    client,
-                    matrices,
-                    consumers,
-                    properties.lineNumber(),
-                    -2.26F,
-                    2.52F,
-                    light
-            );
-        }
     }
 
     private static void renderStationPair(

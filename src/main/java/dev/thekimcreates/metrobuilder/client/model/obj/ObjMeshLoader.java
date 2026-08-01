@@ -5,10 +5,10 @@ import net.minecraft.resource.ResourceManager;
 import net.minecraft.util.Identifier;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
+
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -20,16 +20,15 @@ final class ObjMeshLoader {
     }
 
     static ObjMesh load(ResourceManager resourceManager, Identifier resourceId) throws IOException {
-Resource resource = resourceManager.getResource(resourceId)
-        .orElseThrow(() -> new FileNotFoundException(resourceId.toString()));
+        final Resource resource = resourceManager.getResource(resourceId)
+                .orElseThrow(() -> new IOException("Missing OBJ resource " + resourceId));
 
-try (InputStream stream = resource.getInputStream();
-     BufferedReader reader = new BufferedReader(
-             new InputStreamReader(stream, StandardCharsets.UTF_8)
-     )) {
-
-    return parse(reader, resourceId);
-}
+        try (InputStream stream = resource.getInputStream();
+             BufferedReader reader = new BufferedReader(
+                     new InputStreamReader(stream, StandardCharsets.UTF_8)
+             )) {
+            return parse(reader, resourceId);
+        }
     }
 
     private static ObjMesh parse(BufferedReader reader, Identifier resourceId) throws IOException {
