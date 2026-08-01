@@ -1,8 +1,6 @@
 package dev.thekimcreates.metrobuilder.client.psd;
 
 import dev.thekimcreates.metrobuilder.MetroBuilder;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
@@ -21,7 +19,8 @@ import java.util.function.Consumer;
  * <p>This intentionally uses reflection so MetroBuilder can still compile and
  * launch without bundling MTR or TJMetro. When both mods are installed, the
  * exact {@code RenderPSDDoorTianjinBMT.MODEL_PSD} model is rendered with the
- * original MTR graphics path. This removes all guessed UV and cuboid logic.</p>
+ * original MTR graphics path. MetroBuilder supplies the sampled world light,
+ * eliminating the former full-bright appearance.</p>
  */
 final class TJMetroRuntimeDoorBridge {
     private static final String[] RENDERER_CLASS_NAMES = {
@@ -46,7 +45,9 @@ final class TJMetroRuntimeDoorBridge {
             VertexConsumerProvider consumers,
             Identifier texture,
             float centerX,
-            float baseY
+            float baseY,
+            int light,
+            int overlay
     ) {
         initialize();
         if (!available) {
@@ -68,8 +69,8 @@ final class TJMetroRuntimeDoorBridge {
                     renderModel.invoke(
                             modelPsd,
                             graphicsHolder,
-                            LightmapTextureManager.MAX_LIGHT_COORDINATE,
-                            OverlayTexture.DEFAULT_UV,
+                            light,
+                            overlay,
                             1.0F,
                             1.0F,
                             1.0F,

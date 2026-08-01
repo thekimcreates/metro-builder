@@ -9,38 +9,48 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
-import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
-import org.joml.Matrix3f;
-import org.joml.Matrix4f;
+import net.minecraft.util.math.random.Random;
 
 import java.util.Optional;
 
-/** Renders synchronized precision PSD objects directly into the client world. */
+/**
+ * Renders each precision PSD as the exact six-part Tianjin BMT assembly.
+ *
+ * <p>The four door quarters use TJMetro's own runtime ModelSingleCube and
+ * textures. The two top blocks use Minecraft's baked block-model pipeline with
+ * the exact TJMetro block states requested by the project. MetroBuilder only
+ * supplies the precision transform; it does not add any billboard or header
+ * planes.</p>
+ */
 public final class PSDWorldRenderer {
     private static final double MAX_RENDER_DISTANCE = 192.0D;
     private static final double MAX_RENDER_DISTANCE_SQUARED = MAX_RENDER_DISTANCE * MAX_RENDER_DISTANCE;
 
-    private static final Identifier FALLBACK_TEXTURE = new Identifier("minecraft", "textures/block/iron_block.png");
-    private static final Identifier TJ_BOTTOM_LEFT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_bottom_left.png");
-    private static final Identifier TJ_BOTTOM_RIGHT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_bottom_right.png");
-    private static final Identifier TJ_TOP_LEFT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_top_left.png");
-    private static final Identifier TJ_TOP_RIGHT = new Identifier("tjmetro", "textures/block/psd_door_tianjin_top_right.png");
-    private static final Identifier TJ_BMT_TOP_TEXTURE = new Identifier("tjmetro", "textures/block/psd_tianjin_bmt_top.png");
-    private static final Identifier TJ_BMT_TOP_BLOCK = new Identifier("tjmetro", "psd_top_tianjin_bmt");
+    private static final Identifier TJ_DOOR_BLOCK = new Identifier("tjmetro", "psd_door_tianjin_bmt");
+    private static final Identifier TJ_TOP_BLOCK = new Identifier("tjmetro", "psd_top_tianjin_bmt");
+
+    private static final Identifier TJ_BOTTOM_LEFT_TEXTURE = new Identifier("tjmetro", "textures/block/psd_door_tianjin_bottom_left.png");
+    private static final Identifier TJ_BOTTOM_RIGHT_TEXTURE = new Identifier("tjmetro", "textures/block/psd_door_tianjin_bottom_right.png");
+    private static final Identifier TJ_TOP_LEFT_TEXTURE = new Identifier("tjmetro", "textures/block/psd_door_tianjin_top_left.png");
+    private static final Identifier TJ_TOP_RIGHT_TEXTURE = new Identifier("tjmetro", "textures/block/psd_door_tianjin_top_right.png");
+
+    private static final Identifier FALLBACK_BLOCK = new Identifier("minecraft", "iron_block");
 
     private static boolean initialized;
+    private static boolean warnedMissingTjMetro;
 
     private PSDWorldRenderer() {
     }
@@ -51,7 +61,7 @@ public final class PSDWorldRenderer {
         }
         initialized = true;
         WorldRenderEvents.AFTER_ENTITIES.register(PSDWorldRenderer::renderWorld);
-        MetroBuilder.LOGGER.info("Precision PSD world renderer initialized");
+        MetroBuilder.LOGGER.info("Native six-part TJMetro PSD renderer initialized");
     }
 
     private static void renderWorld(WorldRenderContext context) {
@@ -73,17 +83,19 @@ public final class PSDWorldRenderer {
             if (psd.transform().squaredDistanceTo(cameraPosition) > MAX_RENDER_DISTANCE_SQUARED) {
                 continue;
             }
-            renderPsd(matrices, consumers, cameraPosition, psd);
+            renderPsd(client, matrices, consumers, cameraPosition, psd);
         }
     }
 
     private static void renderPsd(
+            MinecraftClient client,
             MatrixStack matrices,
             VertexConsumerProvider consumers,
             Vec3d cameraPosition,
             ClientPSDObject psd
     ) {
         final PrecisionTransform transform = psd.transform();
+
         matrices.push();
         matrices.translate(
                 transform.x() - cameraPosition.x,
@@ -95,109 +107,157 @@ public final class PSDWorldRenderer {
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(transform.roll()));
         matrices.scale(transform.scaleX(), transform.scaleY(), transform.scaleZ());
 
-        if (FabricLoader.getInstance().isModLoaded("tjmetro")) {
-            renderExactTianjinDoor(matrices, consumers);
-            if (!renderExactTianjinTop(matrices, consumers)) {
-                renderFallbackHeader(matrices, consumers, FALLBACK_TEXTURE);
-            }
+        if (FabricLoader.getInstance().isModLoaded("tjmetro")
+                && Registries.BLOCK.containsId(TJ_DOOR_BLOCK)
+                && Registries.BLOCK.containsId(TJ_TOP_BLOCK)) {
+            renderTianjinAssembly(client, matrices, consumers, transform);
         } else {
-            renderFallbackBody(matrices, consumers);
-            renderFallbackHeader(matrices, consumers, FALLBACK_TEXTURE);
+            if (!warnedMissingTjMetro) {
+                warnedMissingTjMetro = true;
+                MetroBuilder.LOGGER.warn("TJMetro BMT PSD blocks are unavailable; rendering a simple iron-block fallback");
+            }
+            renderFallbackAssembly(client, matrices, consumers, transform);
         }
 
         matrices.pop();
     }
 
-    /**
-     * Reproduces the four real TJMetro BMT door block entities with the same
-     * ModelPart cuboid and logical texture size used by RenderPSDDoorTianjinBMT.
-     */
-    private static void renderExactTianjinDoor(MatrixStack matrices, VertexConsumerProvider consumers) {
-        // Render TJMetro's own ModelSingleCube at runtime. The local model is kept only
-        // as a compatibility fallback when a different TJMetro build hides the class.
-        renderTianjinQuarter(matrices, consumers, TJ_BOTTOM_LEFT, -0.5F, 0.0F);
-        renderTianjinQuarter(matrices, consumers, TJ_BOTTOM_RIGHT, 0.5F, 0.0F);
-        renderTianjinQuarter(matrices, consumers, TJ_TOP_LEFT, -0.5F, 1.0F);
-        renderTianjinQuarter(matrices, consumers, TJ_TOP_RIGHT, 0.5F, 1.0F);
-    }
-
-    private static void renderTianjinQuarter(
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            Identifier texture,
-            float centerX,
-            float baseY
-    ) {
-        if (!TJMetroRuntimeDoorBridge.renderQuarter(matrices, consumers, texture, centerX, baseY)) {
-            TianjinBmtDoorModel.renderQuarter(matrices, consumers, texture, centerX, baseY);
-        }
-    }
-
-    /**
-     * Renders the real TJMetro multipart top block models. Two block states are
-     * assembled exactly as an isolated two-block-wide BMT door would be in-world.
-     */
-    private static boolean renderExactTianjinTop(MatrixStack matrices, VertexConsumerProvider consumers) {
-        final MinecraftClient client = MinecraftClient.getInstance();
-        if (!Registries.BLOCK.containsId(TJ_BMT_TOP_BLOCK)) {
-            return false;
-        }
-        final Block topBlock = Registries.BLOCK.get(TJ_BMT_TOP_BLOCK);
-        if (topBlock == null) {
-            return false;
-        }
-
-        BlockState leftState = topBlock.getDefaultState();
-        leftState = withProperty(leftState, "facing", "south");
-        leftState = withProperty(leftState, "side", "left");
-        leftState = withProperty(leftState, "air_left", "false");
-        leftState = withProperty(leftState, "air_right", "false");
-        leftState = withProperty(leftState, "style", "bmt");
-        leftState = withProperty(leftState, "arrow_direction", "0");
-
-        BlockState rightState = topBlock.getDefaultState();
-        rightState = withProperty(rightState, "facing", "south");
-        rightState = withProperty(rightState, "side", "right");
-        rightState = withProperty(rightState, "air_left", "false");
-        rightState = withProperty(rightState, "air_right", "false");
-        rightState = withProperty(rightState, "style", "bmt");
-        rightState = withProperty(rightState, "arrow_direction", "0");
-
-        renderBlockModel(client, matrices, consumers, leftState, -1.0F, 2.0F, -0.5F);
-        renderBlockModel(client, matrices, consumers, rightState, 0.0F, 2.0F, -0.5F);
-
-        // The station-name/route panel is generated dynamically by TJMetro from MTR
-        // platform data. Do not stretch psd_tianjin_bmt_top.png over this area; that
-        // texture is only the casing/edge atlas and caused the broken header appearance.
-        renderNeutralHeaderPanel(matrices, consumers);
-        return true;
-    }
-
-    private static void renderBlockModel(
+    /** Renders the requested 2-wide by 3-high six-block layout. */
+    private static void renderTianjinAssembly(
             MinecraftClient client,
             MatrixStack matrices,
             VertexConsumerProvider consumers,
-            BlockState state,
-            float x,
-            float y,
-            float z
+            PrecisionTransform transform
     ) {
+        final BlockState topLeft = createTopState("left");
+        final BlockState topRight = createTopState("right");
+        final BlockState upperLeft = createDoorState("upper", "left");
+        final BlockState upperRight = createDoorState("upper", "right");
+        final BlockState lowerLeft = createDoorState("lower", "left");
+        final BlockState lowerRight = createDoorState("lower", "right");
+
+        // Bottom row: left and right door quarters.
+        renderDoorQuarter(client, matrices, consumers, transform, lowerLeft, TJ_BOTTOM_LEFT_TEXTURE, -0.5F, 0.0F, -0.5D, 0.5D, 0.0D);
+        renderDoorQuarter(client, matrices, consumers, transform, lowerRight, TJ_BOTTOM_RIGHT_TEXTURE, 0.5F, 0.0F, 0.5D, 0.5D, 0.0D);
+
+        // Middle row: left and right door quarters.
+        renderDoorQuarter(client, matrices, consumers, transform, upperLeft, TJ_TOP_LEFT_TEXTURE, -0.5F, 1.0F, -0.5D, 1.5D, 0.0D);
+        renderDoorQuarter(client, matrices, consumers, transform, upperRight, TJ_TOP_RIGHT_TEXTURE, 0.5F, 1.0F, 0.5D, 1.5D, 0.0D);
+
+        // Top row: exact TJMetro multipart baked models. No extra front/back panes.
+        renderBakedBlock(client, matrices, consumers, transform, topLeft, -1.0F, 2.0F, -0.5F, -0.5D, 2.5D, 0.0D);
+        renderBakedBlock(client, matrices, consumers, transform, topRight, 0.0F, 2.0F, -0.5F, 0.5D, 2.5D, 0.0D);
+    }
+
+    private static BlockState createDoorState(String half, String side) {
+        BlockState state = Registries.BLOCK.get(TJ_DOOR_BLOCK).getDefaultState();
+        state = withProperty(state, "facing", "south");
+        state = withProperty(state, "end", "false");
+        state = withProperty(state, "half", half);
+        state = withProperty(state, "side", side);
+        state = withProperty(state, "unlocked", "true");
+        return state;
+    }
+
+    private static BlockState createTopState(String side) {
+        BlockState state = Registries.BLOCK.get(TJ_TOP_BLOCK).getDefaultState();
+        state = withProperty(state, "facing", "south");
+        state = withProperty(state, "air_left", "false");
+        state = withProperty(state, "air_right", "false");
+        state = withProperty(state, "arrow_direction", "1");
+        state = withProperty(state, "side", side);
+        state = withProperty(state, "style", "bmt");
+        return state;
+    }
+
+    private static void renderDoorQuarter(
+            MinecraftClient client,
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            PrecisionTransform transform,
+            BlockState state,
+            Identifier texture,
+            float centerX,
+            float baseY,
+            double sampleLocalX,
+            double sampleLocalY,
+            double sampleLocalZ
+    ) {
+        final BlockPos samplePos = sampleWorldPos(transform, sampleLocalX, sampleLocalY, sampleLocalZ);
+        final int light = WorldRenderer.getLightmapCoordinates(client.world, state, samplePos);
+
+        if (!TJMetroRuntimeDoorBridge.renderQuarter(
+                matrices,
+                consumers,
+                texture,
+                centerX,
+                baseY,
+                light,
+                OverlayTexture.DEFAULT_UV
+        )) {
+            TianjinBmtDoorModel.renderQuarter(
+                    matrices,
+                    consumers,
+                    texture,
+                    centerX,
+                    baseY,
+                    light,
+                    OverlayTexture.DEFAULT_UV
+            );
+        }
+    }
+
+    private static void renderBakedBlock(
+            MinecraftClient client,
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            PrecisionTransform transform,
+            BlockState state,
+            float renderX,
+            float renderY,
+            float renderZ,
+            double sampleLocalX,
+            double sampleLocalY,
+            double sampleLocalZ
+    ) {
+        final BlockPos samplePos = sampleWorldPos(transform, sampleLocalX, sampleLocalY, sampleLocalZ);
         final BakedModel model = client.getBlockRenderManager().getModel(state);
         final VertexConsumer vertices = consumers.getBuffer(RenderLayers.getBlockLayer(state));
+
         matrices.push();
-        matrices.translate(x, y, z);
+        matrices.translate(renderX, renderY, renderZ);
         client.getBlockRenderManager().getModelRenderer().render(
-                matrices.peek(),
-                vertices,
-                state,
+                client.world,
                 model,
-                1.0F,
-                1.0F,
-                1.0F,
-                LightmapTextureManager.MAX_LIGHT_COORDINATE,
+                state,
+                samplePos,
+                matrices,
+                vertices,
+                false,
+                Random.create(state.getRenderingSeed(samplePos)),
+                state.getRenderingSeed(samplePos),
                 OverlayTexture.DEFAULT_UV
         );
         matrices.pop();
+    }
+
+    private static BlockPos sampleWorldPos(
+            PrecisionTransform transform,
+            double localX,
+            double localY,
+            double localZ
+    ) {
+        final double radians = Math.toRadians(-transform.yaw());
+        final double cos = Math.cos(radians);
+        final double sin = Math.sin(radians);
+        final double rotatedX = localX * cos + localZ * sin;
+        final double rotatedZ = -localX * sin + localZ * cos;
+
+        return BlockPos.ofFloored(
+                transform.x() + rotatedX,
+                transform.y() + localY,
+                transform.z() + rotatedZ
+        );
     }
 
     private static BlockState withProperty(BlockState state, String propertyName, String valueName) {
@@ -210,6 +270,12 @@ public final class PSDWorldRenderer {
                 return withParsedProperty(state, property, parsed.get());
             }
         }
+        MetroBuilder.LOGGER.warn(
+                "TJMetro block {} does not expose expected property {}={}",
+                Registries.BLOCK.getId(state.getBlock()),
+                propertyName,
+                valueName
+        );
         return state;
     }
 
@@ -218,150 +284,30 @@ public final class PSDWorldRenderer {
         return state.with(property, (Comparable) value);
     }
 
-    private static void renderFallbackBody(MatrixStack matrices, VertexConsumerProvider consumers) {
-        drawCuboid(matrices, consumers, FALLBACK_TEXTURE, -1.0F, 0.0F, 0.375F, 1.0F, 2.0F, 0.5F);
-    }
-
-    private static void renderFallbackHeader(
+    private static void renderFallbackAssembly(
+            MinecraftClient client,
             MatrixStack matrices,
             VertexConsumerProvider consumers,
-            Identifier texture
+            PrecisionTransform transform
     ) {
-        drawCuboid(matrices, consumers, texture, -1.0F, 2.0F, -0.5F, 1.0F, 3.0F, 0.5F);
-    }
-
-    private static void renderNeutralHeaderPanel(
-            MatrixStack matrices,
-            VertexConsumerProvider consumers
-    ) {
-        // TJMetro normally draws a generated station-name texture here. Beta 1 has no
-        // linked MTR platform yet, so render a clean neutral panel in the exact opening
-        // without abusing the casing atlas. Beta 2 will replace this with live data.
-        final VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TJ_BMT_TOP_TEXTURE));
-        final MatrixStack.Entry entry = matrices.peek();
-        final Matrix4f positionMatrix = entry.getPositionMatrix();
-        final Matrix3f normalMatrix = entry.getNormalMatrix();
-
-        final float minX = -0.9921875F;
-        final float maxX = 0.9921875F;
-        // Exact RenderPSDTopTianjinBMT panel bounds:
-        // topPadding=4.5/16, bottomPadding=1.5/16, z=(2-0.05)/16
-        // after the original block-entity matrix transform.
-        final float minY = 2.09375F;
-        final float maxY = 2.71875F;
-        final float frontZ = 0.621875F;
-        final float backZ = -0.621875F;
-
-        quadZ(vertices, positionMatrix, normalMatrix, minX, minY, maxX, maxY, frontZ, 0, 0, 1, 1, 1);
-        quadZ(vertices, positionMatrix, normalMatrix, maxX, minY, minX, maxY, backZ, 0, 0, 1, 1, -1);
-    }
-
-    private static void drawCuboid(
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            Identifier texture,
-            float minX,
-            float minY,
-            float minZ,
-            float maxX,
-            float maxY,
-            float maxZ
-    ) {
-        final VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(texture));
-        final MatrixStack.Entry entry = matrices.peek();
-        final Matrix4f positionMatrix = entry.getPositionMatrix();
-        final Matrix3f normalMatrix = entry.getNormalMatrix();
-
-        quadZ(vertices, positionMatrix, normalMatrix, minX, minY, maxX, maxY, maxZ, 0, 0, 1, 1, 1);
-        quadZ(vertices, positionMatrix, normalMatrix, maxX, minY, minX, maxY, minZ, 0, 0, 1, 1, -1);
-        quadX(vertices, positionMatrix, normalMatrix, minX, minY, maxY, minZ, maxZ, 0, 0, 1, 1, -1);
-        quadX(vertices, positionMatrix, normalMatrix, maxX, minY, maxY, maxZ, minZ, 0, 0, 1, 1, 1);
-        quadY(vertices, positionMatrix, normalMatrix, minX, maxX, maxY, maxZ, minZ, 0, 0, 1, 1, 1);
-        quadY(vertices, positionMatrix, normalMatrix, minX, maxX, minY, minZ, maxZ, 0, 0, 1, 1, -1);
-    }
-
-    private static void quadZ(
-            VertexConsumer vertices,
-            Matrix4f positionMatrix,
-            Matrix3f normalMatrix,
-            float minX,
-            float minY,
-            float maxX,
-            float maxY,
-            float z,
-            float minU,
-            float minV,
-            float maxU,
-            float maxV,
-            float normalZ
-    ) {
-        vertex(vertices, positionMatrix, normalMatrix, minX, minY, z, minU, maxV, 0, 0, normalZ);
-        vertex(vertices, positionMatrix, normalMatrix, maxX, minY, z, maxU, maxV, 0, 0, normalZ);
-        vertex(vertices, positionMatrix, normalMatrix, maxX, maxY, z, maxU, minV, 0, 0, normalZ);
-        vertex(vertices, positionMatrix, normalMatrix, minX, maxY, z, minU, minV, 0, 0, normalZ);
-    }
-
-    private static void quadX(
-            VertexConsumer vertices,
-            Matrix4f positionMatrix,
-            Matrix3f normalMatrix,
-            float x,
-            float minY,
-            float maxY,
-            float minZ,
-            float maxZ,
-            float minU,
-            float minV,
-            float maxU,
-            float maxV,
-            float normalX
-    ) {
-        vertex(vertices, positionMatrix, normalMatrix, x, minY, minZ, minU, maxV, normalX, 0, 0);
-        vertex(vertices, positionMatrix, normalMatrix, x, minY, maxZ, maxU, maxV, normalX, 0, 0);
-        vertex(vertices, positionMatrix, normalMatrix, x, maxY, maxZ, maxU, minV, normalX, 0, 0);
-        vertex(vertices, positionMatrix, normalMatrix, x, maxY, minZ, minU, minV, normalX, 0, 0);
-    }
-
-    private static void quadY(
-            VertexConsumer vertices,
-            Matrix4f positionMatrix,
-            Matrix3f normalMatrix,
-            float minX,
-            float maxX,
-            float y,
-            float minZ,
-            float maxZ,
-            float minU,
-            float minV,
-            float maxU,
-            float maxV,
-            float normalY
-    ) {
-        vertex(vertices, positionMatrix, normalMatrix, minX, y, minZ, minU, maxV, 0, normalY, 0);
-        vertex(vertices, positionMatrix, normalMatrix, maxX, y, minZ, maxU, maxV, 0, normalY, 0);
-        vertex(vertices, positionMatrix, normalMatrix, maxX, y, maxZ, maxU, minV, 0, normalY, 0);
-        vertex(vertices, positionMatrix, normalMatrix, minX, y, maxZ, minU, minV, 0, normalY, 0);
-    }
-
-    private static void vertex(
-            VertexConsumer vertices,
-            Matrix4f positionMatrix,
-            Matrix3f normalMatrix,
-            float x,
-            float y,
-            float z,
-            float u,
-            float v,
-            float normalX,
-            float normalY,
-            float normalZ
-    ) {
-        vertices.vertex(positionMatrix, x, y, z)
-                .color(255, 255, 255, 255)
-                .texture(u, v)
-                .overlay(OverlayTexture.DEFAULT_UV)
-                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
-                .normal(normalMatrix, normalX, normalY, normalZ)
-                .next();
+        final Block fallbackBlock = Registries.BLOCK.get(FALLBACK_BLOCK);
+        final BlockState state = fallbackBlock.getDefaultState();
+        for (int x = -1; x <= 0; x++) {
+            for (int y = 0; y < 3; y++) {
+                renderBakedBlock(
+                        client,
+                        matrices,
+                        consumers,
+                        transform,
+                        state,
+                        x,
+                        y,
+                        -0.5F,
+                        x + 0.5D,
+                        y + 0.5D,
+                        0.0D
+                );
+            }
+        }
     }
 }

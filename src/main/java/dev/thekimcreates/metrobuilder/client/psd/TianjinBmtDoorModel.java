@@ -1,8 +1,6 @@
 package dev.thekimcreates.metrobuilder.client.psd;
 
 import net.minecraft.client.model.ModelPart;
-import net.minecraft.client.render.LightmapTextureManager;
-import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -52,7 +50,9 @@ public final class TianjinBmtDoorModel {
             VertexConsumerProvider consumers,
             Identifier texture,
             float centerX,
-            float baseY
+            float baseY,
+            int light,
+            int overlay
     ) {
         matrices.push();
         matrices.translate(centerX, baseY, 0.0F);
@@ -64,8 +64,8 @@ public final class TianjinBmtDoorModel {
         DOOR_CUBOID.renderCuboid(
                 matrices.peek(),
                 vertices,
-                LightmapTextureManager.MAX_LIGHT_COORDINATE,
-                OverlayTexture.DEFAULT_UV,
+                light,
+                overlay,
                 1.0F,
                 1.0F,
                 1.0F,
