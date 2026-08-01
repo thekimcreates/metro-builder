@@ -68,7 +68,9 @@ final class SeoulBulkyWhiteRenderer {
             ClientPSDObject psd,
             int light
     ) {
-        final float doorOffset = (float) (clampDoorValue(psd.doorValue()) * 0.82D);
+        final double effectiveDoorValue = MtrTrainDoorLink.findDoorValue(client, psd)
+                .orElse(psd.doorValue());
+        final float doorOffset = (float) (clampDoorValue(effectiveDoorValue) * 0.82D);
 
         renderMesh(matrices, consumers, HEADER_MODEL, WHITE_METAL, light, false);
 
@@ -114,7 +116,7 @@ final class SeoulBulkyWhiteRenderer {
         // Fixed panels are a physically separate front layer.
         renderSideAssembly(matrices, consumers, light);
 
-        renderIndicator(matrices, consumers, indicatorLit(psd), light);
+        renderIndicator(matrices, consumers, indicatorLit(psd.id(), effectiveDoorValue), light);
         renderHeaderText(client, matrices, consumers, psd.displayProperties(), light);
     }
 
@@ -540,13 +542,12 @@ final class SeoulBulkyWhiteRenderer {
         matrices.pop();
     }
 
-    private static boolean indicatorLit(ClientPSDObject psd) {
+    private static boolean indicatorLit(UUID psdId, double value) {
         final long now = Util.getMeasuringTimeMs();
         final DoorMotionMemory memory = DOOR_MOTION.computeIfAbsent(
-                psd.id(),
-                ignored -> new DoorMotionMemory(psd.doorValue(), 0, now)
+                psdId,
+                ignored -> new DoorMotionMemory(value, 0, now)
         );
-        final double value = psd.doorValue();
         final double delta = value - memory.lastValue;
 
         final int newDirection = delta > 1.0E-4D ? 1 : delta < -1.0E-4D ? -1 : 0;

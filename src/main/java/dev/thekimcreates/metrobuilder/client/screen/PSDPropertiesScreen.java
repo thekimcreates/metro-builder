@@ -13,6 +13,7 @@ import net.minecraft.util.Identifier;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.DoubleConsumer;
 
 /** Non-pausing properties panel for a pending or placed PSD assembly. */
 public final class PSDPropertiesScreen extends Screen {
@@ -20,6 +21,7 @@ public final class PSDPropertiesScreen extends Screen {
     private final PSDDisplayProperties initialDisplayProperties;
     private final SaveCallback saveCallback;
     private final Runnable deleteCallback;
+    private final DoubleConsumer doorValueCallback;
 
     private Identifier selectedPackId;
     private ButtonWidget packButton;
@@ -53,6 +55,7 @@ public final class PSDPropertiesScreen extends Screen {
                 initialTransform,
                 initialDisplayProperties,
                 saveCallback,
+                null,
                 null
         );
     }
@@ -65,6 +68,18 @@ public final class PSDPropertiesScreen extends Screen {
             SaveCallback saveCallback,
             Runnable deleteCallback
     ) {
+        this(title, packId, initialTransform, initialDisplayProperties, saveCallback, deleteCallback, null);
+    }
+
+    public PSDPropertiesScreen(
+            String title,
+            Identifier packId,
+            PrecisionTransform initialTransform,
+            PSDDisplayProperties initialDisplayProperties,
+            SaveCallback saveCallback,
+            Runnable deleteCallback,
+            DoubleConsumer doorValueCallback
+    ) {
         super(Text.literal(title));
         selectedPackId = Objects.requireNonNull(packId, "packId");
         this.initialTransform = Objects.requireNonNull(initialTransform, "initialTransform");
@@ -74,6 +89,7 @@ public final class PSDPropertiesScreen extends Screen {
         );
         this.saveCallback = Objects.requireNonNull(saveCallback, "saveCallback");
         this.deleteCallback = deleteCallback;
+        this.doorValueCallback = doorValueCallback;
         arrowRight = initialDisplayProperties.arrowRight();
     }
 
@@ -163,11 +179,21 @@ public final class PSDPropertiesScreen extends Screen {
                 .dimensions(leftX + labelWidth, top + 252, fieldWidth, 20)
                 .build());
 
+        if (doorValueCallback != null) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("Open Doors"), button -> setDoorValue(1.0D))
+                    .dimensions(centerX - 96, top + 292, 90, 20)
+                    .build());
+            addDrawableChild(ButtonWidget.builder(Text.literal("Close Doors"), button -> setDoorValue(0.0D))
+                    .dimensions(centerX + 6, top + 292, 90, 20)
+                    .build());
+        }
+
+        final int actionY = doorValueCallback == null ? top + 292 : top + 316;
         addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> close())
-                .dimensions(centerX - 96, top + 292, 90, 20)
+                .dimensions(centerX - 96, actionY, 90, 20)
                 .build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> save())
-                .dimensions(centerX + 6, top + 292, 90, 20)
+                .dimensions(centerX + 6, actionY, 90, 20)
                 .build());
 
         if (deleteCallback != null) {
@@ -175,11 +201,17 @@ public final class PSDPropertiesScreen extends Screen {
                             Text.literal("Delete PSD").formatted(Formatting.RED),
                             button -> deletePsd()
                     )
-                    .dimensions(centerX - 96, top + 316, 192, 20)
+                    .dimensions(centerX - 96, actionY + 24, 192, 20)
                     .build());
         }
 
         setInitialFocus(xField);
+    }
+
+    private void setDoorValue(double value) {
+        if (doorValueCallback != null) {
+            doorValueCallback.accept(value);
+        }
     }
 
     private TextFieldWidget addNumericField(int x, int y, int width, double value) {
@@ -261,7 +293,9 @@ public final class PSDPropertiesScreen extends Screen {
         final int top = Math.max(8, height / 2 - 166);
         final int leftX = centerX - 216;
         final int rightX = centerX + 18;
-        final int panelBottom = deleteCallback == null ? top + 326 : top + 350;
+        final int panelBottom = deleteCallback == null
+                ? top + (doorValueCallback == null ? 326 : 350)
+                : top + (doorValueCallback == null ? 350 : 374);
 
         context.fill(centerX - 244, top - 10, centerX + 244, panelBottom, 0xE0101010);
         context.drawCenteredTextWithShadow(textRenderer, title, centerX, top, 0xFFFFFF);

@@ -106,6 +106,20 @@ public final class ClientPrecisionState {
         }
     }
 
+    public static synchronized void updatePsdDoorValue(UUID objectId, double doorValue) {
+        psds = psds.stream()
+                .map(psd -> psd.id().equals(objectId)
+                        ? new ClientPSDObject(
+                                psd.id(),
+                                psd.transform(),
+                                psd.packId(),
+                                doorValue,
+                                psd.displayProperties()
+                        )
+                        : psd)
+                .toList();
+    }
+
     public static synchronized void reset() {
         dimensionId = null;
         snapshot = new NbtCompound();
