@@ -5,7 +5,8 @@ import net.minecraft.resource.ResourceManager;
 import net.minecraft.util.Identifier;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
-
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
