@@ -40,9 +40,6 @@ public final class PSDWorldRenderer {
     private static final Identifier TJ_BMT_TOP_TEXTURE = new Identifier("tjmetro", "textures/block/psd_tianjin_bmt_top.png");
     private static final Identifier TJ_BMT_TOP_BLOCK = new Identifier("tjmetro", "psd_top_tianjin_bmt");
 
-    private static final float HEADER_FRONT_Z = 0.5005F;
-    private static final float HEADER_BACK_Z = -0.5005F;
-
     private static boolean initialized;
 
     private PSDWorldRenderer() {
@@ -101,7 +98,7 @@ public final class PSDWorldRenderer {
         if (FabricLoader.getInstance().isModLoaded("tjmetro")) {
             renderExactTianjinDoor(matrices, consumers);
             if (!renderExactTianjinTop(matrices, consumers)) {
-                renderFallbackHeader(matrices, consumers, TJ_BMT_TOP_TEXTURE);
+                renderFallbackHeader(matrices, consumers, FALLBACK_TEXTURE);
             }
         } else {
             renderFallbackBody(matrices, consumers);
@@ -116,10 +113,24 @@ public final class PSDWorldRenderer {
      * ModelPart cuboid and logical texture size used by RenderPSDDoorTianjinBMT.
      */
     private static void renderExactTianjinDoor(MatrixStack matrices, VertexConsumerProvider consumers) {
-        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_BOTTOM_LEFT, -0.5F, 0.0F);
-        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_BOTTOM_RIGHT, 0.5F, 0.0F);
-        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_TOP_LEFT, -0.5F, 1.0F);
-        TianjinBmtDoorModel.renderQuarter(matrices, consumers, TJ_TOP_RIGHT, 0.5F, 1.0F);
+        // Render TJMetro's own ModelSingleCube at runtime. The local model is kept only
+        // as a compatibility fallback when a different TJMetro build hides the class.
+        renderTianjinQuarter(matrices, consumers, TJ_BOTTOM_LEFT, -0.5F, 0.0F);
+        renderTianjinQuarter(matrices, consumers, TJ_BOTTOM_RIGHT, 0.5F, 0.0F);
+        renderTianjinQuarter(matrices, consumers, TJ_TOP_LEFT, -0.5F, 1.0F);
+        renderTianjinQuarter(matrices, consumers, TJ_TOP_RIGHT, 0.5F, 1.0F);
+    }
+
+    private static void renderTianjinQuarter(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            Identifier texture,
+            float centerX,
+            float baseY
+    ) {
+        if (!TJMetroRuntimeDoorBridge.renderQuarter(matrices, consumers, texture, centerX, baseY)) {
+            TianjinBmtDoorModel.renderQuarter(matrices, consumers, texture, centerX, baseY);
+        }
     }
 
     /**
@@ -137,27 +148,28 @@ public final class PSDWorldRenderer {
         }
 
         BlockState leftState = topBlock.getDefaultState();
-        leftState = withProperty(leftState, "facing", "north");
+        leftState = withProperty(leftState, "facing", "south");
         leftState = withProperty(leftState, "side", "left");
-        leftState = withProperty(leftState, "air_left", "true");
+        leftState = withProperty(leftState, "air_left", "false");
         leftState = withProperty(leftState, "air_right", "false");
         leftState = withProperty(leftState, "style", "bmt");
         leftState = withProperty(leftState, "arrow_direction", "0");
 
         BlockState rightState = topBlock.getDefaultState();
-        rightState = withProperty(rightState, "facing", "north");
+        rightState = withProperty(rightState, "facing", "south");
         rightState = withProperty(rightState, "side", "right");
         rightState = withProperty(rightState, "air_left", "false");
-        rightState = withProperty(rightState, "air_right", "true");
+        rightState = withProperty(rightState, "air_right", "false");
         rightState = withProperty(rightState, "style", "bmt");
         rightState = withProperty(rightState, "arrow_direction", "0");
 
         renderBlockModel(client, matrices, consumers, leftState, -1.0F, 2.0F, -0.5F);
         renderBlockModel(client, matrices, consumers, rightState, 0.0F, 2.0F, -0.5F);
 
-        // TJMetro's block entity normally fills the center with a dynamic station-name texture.
-        // Beta 1 renders the official neutral BMT casing texture in that exact 2 x 1 area.
-        renderHeaderPanel(matrices, consumers, TJ_BMT_TOP_TEXTURE);
+        // The station-name/route panel is generated dynamically by TJMetro from MTR
+        // platform data. Do not stretch psd_tianjin_bmt_top.png over this area; that
+        // texture is only the casing/edge atlas and caused the broken header appearance.
+        renderNeutralHeaderPanel(matrices, consumers);
         return true;
     }
 
@@ -218,18 +230,30 @@ public final class PSDWorldRenderer {
         drawCuboid(matrices, consumers, texture, -1.0F, 2.0F, -0.5F, 1.0F, 3.0F, 0.5F);
     }
 
-    private static void renderHeaderPanel(
+    private static void renderNeutralHeaderPanel(
             MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            Identifier texture
+            VertexConsumerProvider consumers
     ) {
-        final VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(texture));
+        // TJMetro normally draws a generated station-name texture here. Beta 1 has no
+        // linked MTR platform yet, so render a clean neutral panel in the exact opening
+        // without abusing the casing atlas. Beta 2 will replace this with live data.
+        final VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityCutoutNoCull(TJ_BMT_TOP_TEXTURE));
         final MatrixStack.Entry entry = matrices.peek();
         final Matrix4f positionMatrix = entry.getPositionMatrix();
         final Matrix3f normalMatrix = entry.getNormalMatrix();
 
-        quadZ(vertices, positionMatrix, normalMatrix, -1.0F, 2.0F, 1.0F, 3.0F, HEADER_FRONT_Z, 0, 0, 1, 1, 1);
-        quadZ(vertices, positionMatrix, normalMatrix, 1.0F, 2.0F, -1.0F, 3.0F, HEADER_BACK_Z, 0, 0, 1, 1, -1);
+        final float minX = -0.9921875F;
+        final float maxX = 0.9921875F;
+        // Exact RenderPSDTopTianjinBMT panel bounds:
+        // topPadding=4.5/16, bottomPadding=1.5/16, z=(2-0.05)/16
+        // after the original block-entity matrix transform.
+        final float minY = 2.09375F;
+        final float maxY = 2.71875F;
+        final float frontZ = 0.621875F;
+        final float backZ = -0.621875F;
+
+        quadZ(vertices, positionMatrix, normalMatrix, minX, minY, maxX, maxY, frontZ, 0, 0, 1, 1, 1);
+        quadZ(vertices, positionMatrix, normalMatrix, maxX, minY, minX, maxY, backZ, 0, 0, 1, 1, -1);
     }
 
     private static void drawCuboid(
