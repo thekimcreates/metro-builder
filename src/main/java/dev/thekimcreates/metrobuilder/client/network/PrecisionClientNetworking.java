@@ -88,6 +88,18 @@ public final class PrecisionClientNetworking {
         ClientPlayNetworking.send(PrecisionNetworking.PSD_UPDATE_TRANSFORM, buffer);
     }
 
+    public static void updatePsdProperties(
+            UUID objectId,
+            Identifier packId,
+            PrecisionTransform transform
+    ) {
+        final PacketByteBuf buffer = PacketByteBufs.create();
+        buffer.writeUuid(objectId);
+        buffer.writeIdentifier(packId);
+        PrecisionNetworking.writeTransform(buffer, transform);
+        ClientPlayNetworking.send(PrecisionNetworking.PSD_UPDATE_PROPERTIES, buffer);
+    }
+
     public static void deletePsd(UUID objectId) {
         final PacketByteBuf buffer = PacketByteBufs.create();
         buffer.writeUuid(objectId);

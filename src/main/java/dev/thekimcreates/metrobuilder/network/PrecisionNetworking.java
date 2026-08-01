@@ -26,6 +26,7 @@ public final class PrecisionNetworking {
     public static final Identifier SELECTION_STATE = MetroBuilder.id("precision_selection_state");
     public static final Identifier PSD_PLACE = MetroBuilder.id("psd_place");
     public static final Identifier PSD_UPDATE_TRANSFORM = MetroBuilder.id("psd_update_transform");
+    public static final Identifier PSD_UPDATE_PROPERTIES = MetroBuilder.id("psd_update_properties");
     public static final Identifier PSD_DELETE = MetroBuilder.id("psd_delete");
 
     private static final double MAX_EDIT_DISTANCE_SQUARED = 32.0D * 32.0D;
@@ -105,6 +106,43 @@ public final class PrecisionNetworking {
 
                         final ServerWorld world = player.getServerWorld();
                         if (PSDManager.updateTransform(world, objectId, transform)) {
+                            broadcastSnapshot(world);
+                        }
+                    });
+                }
+        );
+
+        ServerPlayNetworking.registerGlobalReceiver(
+                PSD_UPDATE_PROPERTIES,
+                (server, player, handler, buffer, responseSender) -> {
+                    final UUID objectId = buffer.readUuid();
+                    final Identifier packId = buffer.readIdentifier();
+                    final PrecisionTransform transform = readTransform(buffer);
+                    server.execute(() -> {
+                        if (!canUseWand(player)
+                                || !isWithinEditDistance(player, transform)) {
+                            return;
+                        }
+
+                        final Optional<PrecisionSelectionManager.Selection> selection =
+                                PrecisionSelectionManager.current(player);
+                        if (selection.isEmpty()
+                                || !selection.get().objectId().equals(objectId)) {
+                            return;
+                        }
+
+                        final ServerWorld world = player.getServerWorld();
+                        final boolean transformChanged = PSDManager.updateTransform(
+                                world,
+                                objectId,
+                                transform
+                        );
+                        final boolean packChanged = PSDManager.updatePackId(
+                                world,
+                                objectId,
+                                packId
+                        );
+                        if (transformChanged || packChanged) {
                             broadcastSnapshot(world);
                         }
                     });

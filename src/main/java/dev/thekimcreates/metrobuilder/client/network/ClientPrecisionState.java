@@ -72,6 +72,18 @@ public final class ClientPrecisionState {
                 .toList();
     }
 
+    public static synchronized void updatePsdProperties(
+            UUID objectId,
+            net.minecraft.util.Identifier packId,
+            dev.thekimcreates.metrobuilder.precision.PrecisionTransform transform
+    ) {
+        psds = psds.stream()
+                .map(psd -> psd.id().equals(objectId)
+                        ? new ClientPSDObject(psd.id(), transform, packId, psd.doorValue())
+                        : psd)
+                .toList();
+    }
+
     public static synchronized void removePsd(UUID objectId) {
         psds = psds.stream()
                 .filter(psd -> !psd.id().equals(objectId))

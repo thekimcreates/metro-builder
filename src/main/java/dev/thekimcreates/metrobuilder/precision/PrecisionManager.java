@@ -88,6 +88,16 @@ public final class PrecisionManager {
         return true;
     }
 
+    /** Marks already-mutated type-specific object data as needing persistence. */
+    public boolean markObjectChanged(UUID objectId) {
+        Objects.requireNonNull(objectId, "objectId");
+        if (!objects.containsKey(objectId)) {
+            return false;
+        }
+        dirtyCallback.run();
+        return true;
+    }
+
     public Optional<PrecisionObject> findNearest(Vec3d point, double maximumDistance) {
         Objects.requireNonNull(point, "point");
         if (!Double.isFinite(maximumDistance) || maximumDistance < 0.0) {

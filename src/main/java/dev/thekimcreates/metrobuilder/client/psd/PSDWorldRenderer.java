@@ -4,6 +4,8 @@ import dev.thekimcreates.metrobuilder.MetroBuilder;
 import dev.thekimcreates.metrobuilder.client.builder.BuilderWandClientController;
 import dev.thekimcreates.metrobuilder.client.network.ClientPrecisionState;
 import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
+import dev.thekimcreates.metrobuilder.psd.PSDPackDefinition;
+import dev.thekimcreates.metrobuilder.psd.PSDPackRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -125,14 +127,25 @@ public final class PSDWorldRenderer {
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(transform.roll()));
         matrices.scale(transform.scaleX(), transform.scaleY(), transform.scaleZ());
 
-        if (FabricLoader.getInstance().isModLoaded("tjmetro")
+        final PSDPackDefinition pack = PSDPackRegistry.resolve(psd.packId());
+        final boolean requiredModAvailable = pack.optionalRequiredMod()
+                .map(modId -> FabricLoader.getInstance().isModLoaded(modId))
+                .orElse(true);
+        final boolean canRenderTjMetro = pack.rendererId().equals(PSDPackRegistry.TJMETRO_BMT_RENDERER)
+                && requiredModAvailable
                 && Registries.BLOCK.containsId(TJ_DOOR_BLOCK)
-                && Registries.BLOCK.containsId(TJ_TOP_BLOCK)) {
+                && Registries.BLOCK.containsId(TJ_TOP_BLOCK);
+
+        if (canRenderTjMetro) {
             renderTianjinAssembly(client, matrices, consumers, transform);
         } else {
             if (!warnedMissingTjMetro) {
                 warnedMissingTjMetro = true;
-                MetroBuilder.LOGGER.warn("TJMetro BMT PSD blocks are unavailable; rendering a simple iron-block fallback");
+                MetroBuilder.LOGGER.warn(
+                        "PSD pack {} cannot use renderer {}; rendering an iron-block fallback",
+                        psd.packId(),
+                        pack.rendererId()
+                );
             }
             renderFallbackAssembly(client, matrices, consumers, transform);
         }

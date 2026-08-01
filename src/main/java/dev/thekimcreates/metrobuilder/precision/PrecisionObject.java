@@ -73,6 +73,11 @@ public abstract class PrecisionObject {
         return true;
     }
 
+    /** Increments the revision after a concrete object mutates non-transform data. */
+    protected final void markRevised() {
+        revision++;
+    }
+
     public final NbtCompound writeNbt() {
         final NbtCompound root = new NbtCompound();
         root.putString(TYPE_KEY, type.id().toString());

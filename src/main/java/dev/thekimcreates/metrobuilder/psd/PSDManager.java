@@ -72,6 +72,23 @@ public final class PSDManager {
         return precisionManager(world).updateTransform(objectId, transform);
     }
 
+    public static boolean updatePackId(
+            ServerWorld world,
+            UUID objectId,
+            Identifier packId
+    ) {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(objectId, "objectId");
+        Objects.requireNonNull(packId, "packId");
+
+        final Optional<PSDObject> object = find(world, objectId);
+        if (object.isEmpty() || !object.get().replacePackId(packId)) {
+            return false;
+        }
+        precisionManager(world).markObjectChanged(objectId);
+        return true;
+    }
+
     public static boolean remove(ServerWorld world, UUID objectId) {
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(objectId, "objectId");

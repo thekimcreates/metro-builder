@@ -160,7 +160,7 @@ public final class BuilderWandClientController {
         );
         PrecisionClientNetworking.requestSelectionClear();
         client.player.sendMessage(
-                Text.literal("Pending PSD created — right-click another spot to place"),
+                Text.literal("Pending PSD created — right-click again to place"),
                 true
         );
     }
@@ -242,9 +242,9 @@ public final class BuilderWandClientController {
                     "Pending PSD",
                     openedPending.packId,
                     openedPending.transform,
-                    updated -> pending = pending == null
-                            ? openedPending.withTransform(updated)
-                            : pending.withTransform(updated)
+                    (updatedPackId, updatedTransform) -> pending = pending == null
+                            ? openedPending.withProperties(updatedPackId, updatedTransform)
+                            : pending.withProperties(updatedPackId, updatedTransform)
             ));
             return;
         }
@@ -266,10 +266,14 @@ public final class BuilderWandClientController {
                 "PSD Properties",
                 psd.packId(),
                 psd.transform(),
-                updated -> {
-                    lastPlacedTemplate = PSDTemplate.from(psd.packId(), updated);
-                    ClientPrecisionState.updatePsdTransform(psd.id(), updated);
-                    PrecisionClientNetworking.updatePsdTransform(psd.id(), updated);
+                (updatedPackId, updatedTransform) -> {
+                    lastPlacedTemplate = PSDTemplate.from(updatedPackId, updatedTransform);
+                    ClientPrecisionState.updatePsdProperties(psd.id(), updatedPackId, updatedTransform);
+                    PrecisionClientNetworking.updatePsdProperties(
+                            psd.id(),
+                            updatedPackId,
+                            updatedTransform
+                    );
                 },
                 () -> {
                     // Keep the deleted PSD's properties as the template for the
@@ -394,6 +398,13 @@ public final class BuilderWandClientController {
     private record PendingPSD(net.minecraft.util.Identifier packId, PrecisionTransform transform) {
         private PendingPSD withTransform(PrecisionTransform updatedTransform) {
             return new PendingPSD(packId, updatedTransform);
+        }
+
+        private PendingPSD withProperties(
+                net.minecraft.util.Identifier updatedPackId,
+                PrecisionTransform updatedTransform
+        ) {
+            return new PendingPSD(updatedPackId, updatedTransform);
         }
     }
 

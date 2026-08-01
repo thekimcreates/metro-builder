@@ -21,7 +21,7 @@ public final class PSDObject extends PrecisionObject {
     private static final String PACK_ID_KEY = "PackId";
     private static final String DOOR_VALUE_KEY = "DoorValue";
 
-    private final Identifier packId;
+    private Identifier packId;
     private final double doorValue;
 
     private PSDObject(
@@ -70,6 +70,16 @@ public final class PSDObject extends PrecisionObject {
 
     public Identifier packId() {
         return packId;
+    }
+
+    boolean replacePackId(Identifier newPackId) {
+        Objects.requireNonNull(newPackId, "newPackId");
+        if (packId.equals(newPackId)) {
+            return false;
+        }
+        packId = newPackId;
+        markRevised();
+        return true;
     }
 
     /** Door animation value reserved for Beta 2 synchronization: 0 = closed, 1 = open. */
