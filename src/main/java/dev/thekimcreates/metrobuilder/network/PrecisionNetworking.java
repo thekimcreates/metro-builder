@@ -26,6 +26,7 @@ public final class PrecisionNetworking {
     public static final Identifier SELECTION_STATE = MetroBuilder.id("precision_selection_state");
     public static final Identifier PSD_PLACE = MetroBuilder.id("psd_place");
     public static final Identifier PSD_UPDATE_TRANSFORM = MetroBuilder.id("psd_update_transform");
+    public static final Identifier PSD_DELETE = MetroBuilder.id("psd_delete");
 
     private static final double MAX_EDIT_DISTANCE_SQUARED = 32.0D * 32.0D;
     private static boolean initialized;
@@ -105,6 +106,39 @@ public final class PrecisionNetworking {
                         final ServerWorld world = player.getServerWorld();
                         if (PSDManager.updateTransform(world, objectId, transform)) {
                             broadcastSnapshot(world);
+                        }
+                    });
+                }
+        );
+
+        ServerPlayNetworking.registerGlobalReceiver(
+                PSD_DELETE,
+                (server, player, handler, buffer, responseSender) -> {
+                    final UUID objectId = buffer.readUuid();
+                    server.execute(() -> {
+                        if (!canUseWand(player)) {
+                            return;
+                        }
+
+                        final Optional<PrecisionSelectionManager.Selection> selection =
+                                PrecisionSelectionManager.current(player);
+                        if (selection.isEmpty()
+                                || !selection.get().objectId().equals(objectId)) {
+                            return;
+                        }
+
+                        final ServerWorld world = player.getServerWorld();
+                        final Optional<PSDObject> psd = PSDManager.find(world, objectId);
+                        if (psd.isEmpty()
+                                || !isWithinEditDistance(player, psd.get().transform())) {
+                            return;
+                        }
+
+                        if (PSDManager.remove(world, objectId)) {
+                            PrecisionSelectionManager.clear(player);
+                            broadcastSnapshot(world);
+                            sendSelectionState(player);
+                            player.sendMessage(Text.literal("PSD deleted"), true);
                         }
                     });
                 }

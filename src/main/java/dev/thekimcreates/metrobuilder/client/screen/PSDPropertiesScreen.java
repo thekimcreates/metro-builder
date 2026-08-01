@@ -6,6 +6,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
 import java.util.Locale;
@@ -17,6 +18,7 @@ public final class PSDPropertiesScreen extends Screen {
     private final Identifier packId;
     private final PrecisionTransform initialTransform;
     private final Consumer<PrecisionTransform> saveCallback;
+    private final Runnable deleteCallback;
 
     private TextFieldWidget xField;
     private TextFieldWidget yField;
@@ -30,10 +32,21 @@ public final class PSDPropertiesScreen extends Screen {
             PrecisionTransform initialTransform,
             Consumer<PrecisionTransform> saveCallback
     ) {
+        this(title, packId, initialTransform, saveCallback, null);
+    }
+
+    public PSDPropertiesScreen(
+            String title,
+            Identifier packId,
+            PrecisionTransform initialTransform,
+            Consumer<PrecisionTransform> saveCallback,
+            Runnable deleteCallback
+    ) {
         super(Text.literal(title));
         this.packId = Objects.requireNonNull(packId, "packId");
         this.initialTransform = Objects.requireNonNull(initialTransform, "initialTransform");
         this.saveCallback = Objects.requireNonNull(saveCallback, "saveCallback");
+        this.deleteCallback = deleteCallback;
     }
 
     @Override
@@ -54,6 +67,15 @@ public final class PSDPropertiesScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> save())
                 .dimensions(centerX + 6, top + 166, 86, 20)
                 .build());
+
+        if (deleteCallback != null) {
+            addDrawableChild(ButtonWidget.builder(
+                            Text.literal("Delete PSD").formatted(Formatting.RED),
+                            button -> deletePsd()
+                    )
+                    .dimensions(centerX - 92, top + 190, 184, 20)
+                    .build());
+        }
 
         setInitialFocus(xField);
     }
@@ -93,13 +115,22 @@ public final class PSDPropertiesScreen extends Screen {
         }
     }
 
+    private void deletePsd() {
+        if (deleteCallback == null) {
+            return;
+        }
+        deleteCallback.run();
+        close();
+    }
+
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
         final int centerX = width / 2;
         final int top = height / 2 - 104;
 
-        context.fill(centerX - 112, top - 16, centerX + 112, top + 200, 0xE0101010);
+        final int panelBottom = deleteCallback == null ? top + 200 : top + 224;
+        context.fill(centerX - 112, top - 16, centerX + 112, panelBottom, 0xE0101010);
         context.drawCenteredTextWithShadow(textRenderer, title, centerX, top - 7, 0xFFFFFF);
         context.drawCenteredTextWithShadow(
                 textRenderer,

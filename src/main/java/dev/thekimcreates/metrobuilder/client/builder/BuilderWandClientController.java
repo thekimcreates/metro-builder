@@ -117,19 +117,21 @@ public final class BuilderWandClientController {
         }
 
         if (pending != null) {
-            pending = pending.withTransform(pending.transform.withPosition(clickedPosition));
+            // Match the original precision Block Display workflow: the second
+            // right-click confirms the preview exactly where it currently is.
+            // It must not jump to the position targeted by the confirmation click.
+            final PendingPSD confirmed = pending;
             lastPlacedTemplate = new PSDTemplate(
-                    pending.packId,
-                    pending.transform.pitch(),
-                    pending.transform.yaw(),
-                    pending.transform.roll(),
-                    pending.transform.scaleX(),
-                    pending.transform.scaleY(),
-                    pending.transform.scaleZ()
+                    confirmed.packId,
+                    confirmed.transform.pitch(),
+                    confirmed.transform.yaw(),
+                    confirmed.transform.roll(),
+                    confirmed.transform.scaleX(),
+                    confirmed.transform.scaleY(),
+                    confirmed.transform.scaleZ()
             );
-            PrecisionClientNetworking.placePsd(pending.packId, pending.transform);
+            PrecisionClientNetworking.placePsd(confirmed.packId, confirmed.transform);
             pending = null;
-            client.player.sendMessage(Text.literal("PSD placed"), true);
             return;
         }
 
@@ -268,6 +270,13 @@ public final class BuilderWandClientController {
                     lastPlacedTemplate = PSDTemplate.from(psd.packId(), updated);
                     ClientPrecisionState.updatePsdTransform(psd.id(), updated);
                     PrecisionClientNetworking.updatePsdTransform(psd.id(), updated);
+                },
+                () -> {
+                    // Keep the deleted PSD's properties as the template for the
+                    // next newly-created pending PSD.
+                    lastPlacedTemplate = PSDTemplate.from(psd.packId(), psd.transform());
+                    ClientPrecisionState.removePsd(psd.id());
+                    PrecisionClientNetworking.deletePsd(psd.id());
                 }
         ));
     }

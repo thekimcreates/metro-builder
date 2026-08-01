@@ -72,6 +72,15 @@ public final class ClientPrecisionState {
                 .toList();
     }
 
+    public static synchronized void removePsd(UUID objectId) {
+        psds = psds.stream()
+                .filter(psd -> !psd.id().equals(objectId))
+                .toList();
+        if (objectId.equals(selectedObjectId)) {
+            selectedObjectId = null;
+        }
+    }
+
     public static synchronized void reset() {
         dimensionId = null;
         snapshot = new NbtCompound();
