@@ -2,6 +2,7 @@ package dev.thekimcreates.metrobuilder.client;
 
 import dev.thekimcreates.metrobuilder.MetroBuilder;
 import dev.thekimcreates.metrobuilder.client.builder.BuilderWandClientController;
+import dev.thekimcreates.metrobuilder.client.model.obj.ObjMeshResourceLoader;
 import dev.thekimcreates.metrobuilder.client.network.PrecisionClientNetworking;
 import dev.thekimcreates.metrobuilder.client.psd.PSDWorldRenderer;
 import dev.thekimcreates.metrobuilder.client.psd.pack.PSDPackResourceLoader;
@@ -17,6 +18,7 @@ public final class MetroBuilderClient implements ClientModInitializer {
     public void onInitializeClient() {
         PrecisionClientNetworking.initializeClient();
         PSDPackResourceLoader.initialize();
+        ObjMeshResourceLoader.initialize();
         BuilderWandClientController.initialize();
         PSDWorldRenderer.initialize();
         MetroBuilder.LOGGER.info("MetroBuilder client initialized");

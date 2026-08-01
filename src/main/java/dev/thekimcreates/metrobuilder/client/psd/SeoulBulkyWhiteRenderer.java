@@ -1,10 +1,11 @@
 package dev.thekimcreates.metrobuilder.client.psd;
 
 import dev.thekimcreates.metrobuilder.MetroBuilder;
+import dev.thekimcreates.metrobuilder.client.model.obj.ObjMesh;
+import dev.thekimcreates.metrobuilder.client.model.obj.ObjMeshCache;
 import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
@@ -12,48 +13,45 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.RotationAxis;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Renders the native five-block Seoul Metro Bulky White PSD assembly. */
+/** Renders the five-block Seoul Metro Bulky White PSD from authored OBJ meshes. */
 final class SeoulBulkyWhiteRenderer {
     static final double HALF_WIDTH = 2.5D;
-    static final double HALF_DEPTH = 0.16D;
+    static final double HALF_DEPTH = 0.21D;
 
-    private static final Identifier WHITE_METAL = MetroBuilder.id(
-            "textures/psd/seoul_bulky_white/white_metal.png"
-    );
-    private static final Identifier DARK_FRAME = MetroBuilder.id(
-            "textures/psd/seoul_bulky_white/dark_frame.png"
-    );
-    private static final Identifier GLASS = MetroBuilder.id(
-            "textures/psd/seoul_bulky_white/glass.png"
-    );
-    private static final Identifier THRESHOLD = MetroBuilder.id(
-            "textures/psd/seoul_bulky_white/threshold.png"
-    );
-    private static final Identifier CAUTION = MetroBuilder.id(
-            "textures/psd/seoul_bulky_white/caution.png"
-    );
-    private static final Identifier INDICATOR_ON = MetroBuilder.id(
-            "textures/psd/seoul_bulky_white/indicator_on.png"
-    );
-    private static final Identifier INDICATOR_OFF = MetroBuilder.id(
-            "textures/psd/seoul_bulky_white/indicator_off.png"
-    );
+    private static final String MODEL_ROOT = "models/psd/seoul_bulky_white/";
 
-    private static final int ATLAS_SIZE = 256;
-    private static final float FRAME_DEPTH = 0.22F;
-    private static final float GLASS_DEPTH = 0.035F;
-    private static final float DECAL_DEPTH = 0.008F;
-    private static final float POST_WIDTH = 0.10F;
-    private static final float RAIL_HEIGHT = 0.10F;
+    private static final Identifier HEADER_MODEL = model("header");
+    private static final Identifier HEADER_WINGS_MODEL = model("header_wings");
+    private static final Identifier SIDE_WHITE_MODEL = model("side_white");
+    private static final Identifier SIDE_DARK_MODEL = model("side_dark");
+    private static final Identifier SIDE_GLASS_MODEL = model("side_glass");
+    private static final Identifier SIDE_THRESHOLD_MODEL = model("side_threshold");
+    private static final Identifier LEFT_DOOR_WHITE_MODEL = model("left_door_white");
+    private static final Identifier LEFT_DOOR_DARK_MODEL = model("left_door_dark");
+    private static final Identifier LEFT_DOOR_GLASS_MODEL = model("left_door_glass");
+    private static final Identifier LEFT_DOOR_THRESHOLD_MODEL = model("left_door_threshold");
+    private static final Identifier RIGHT_DOOR_WHITE_MODEL = model("right_door_white");
+    private static final Identifier RIGHT_DOOR_DARK_MODEL = model("right_door_dark");
+    private static final Identifier RIGHT_DOOR_GLASS_MODEL = model("right_door_glass");
+    private static final Identifier RIGHT_DOOR_THRESHOLD_MODEL = model("right_door_threshold");
 
+    private static final Identifier WHITE_METAL = texture("white_metal");
+    private static final Identifier DARK_FRAME = texture("dark_frame");
+    private static final Identifier GLASS = texture("glass");
+    private static final Identifier THRESHOLD = texture("threshold");
+    private static final Identifier CAUTION = texture("caution");
+    private static final Identifier INDICATOR_ON = texture("indicator_on");
+    private static final Identifier INDICATOR_OFF = texture("indicator_off");
+
+    private static final float FRONT_OVERLAY_Z = 0.182F;
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
 
     private SeoulBulkyWhiteRenderer() {
@@ -66,207 +64,195 @@ final class SeoulBulkyWhiteRenderer {
             ClientPSDObject psd,
             int light
     ) {
-        final float doorOffset = (float) (Math.max(0.0D, Math.min(1.0D, psd.doorValue())) * 0.82D);
+        final float doorOffset = (float) (clampDoorValue(psd.doorValue()) * 0.82D);
 
-        // Single top row. The header spans the complete five-block assembly.
-        renderCuboid(matrices, consumers, WHITE_METAL, -2.5F, 2.0F, -0.14F, 5.0F, 1.0F, 0.28F, light, false);
-        renderCuboid(matrices, consumers, DARK_FRAME, -2.5F, 1.90F, -0.15F, 5.0F, 0.10F, 0.30F, light, false);
+        renderMesh(matrices, consumers, HEADER_MODEL, WHITE_METAL, light, false);
+        renderSideAssembly(matrices, consumers, light);
 
-        // Fixed outer and separator frames.
-        renderPost(matrices, consumers, -2.50F, light);
-        renderPost(matrices, consumers, -1.00F, light);
-        renderPost(matrices, consumers, 0.00F, light);
-        renderPost(matrices, consumers, 1.00F, light);
-        renderPost(matrices, consumers, 2.50F, light);
-        renderCuboid(matrices, consumers, WHITE_METAL, -2.5F, 0.0F, -0.12F, 5.0F, RAIL_HEIGHT, 0.24F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, -2.5F, 1.90F, -0.12F, 5.0F, RAIL_HEIGHT, 0.24F, light, false);
-
-        // Clean 1.5-block side glass panels: no text, decals, or platform numbers.
-        renderGlassPanel(matrices, consumers, -2.45F, -1.05F, light);
-        renderGlassPanel(matrices, consumers, 1.05F, 2.45F, light);
-
-        // Sliding door leaves, each exactly one block wide when closed.
-        renderDoorLeaf(
+        matrices.push();
+        matrices.translate(-doorOffset, 0.0F, 0.0F);
+        renderDoorMeshes(
                 matrices,
                 consumers,
-                -0.95F - doorOffset,
-                -0.05F - doorOffset,
-                -0.5F - doorOffset,
-                true,
-                psd.displayProperties(),
+                LEFT_DOOR_WHITE_MODEL,
+                LEFT_DOOR_DARK_MODEL,
+                LEFT_DOOR_GLASS_MODEL,
+                LEFT_DOOR_THRESHOLD_MODEL,
                 light
         );
-        renderDoorLeaf(
+        renderCaution(matrices, consumers, -0.5F, light);
+        matrices.pop();
+
+        matrices.push();
+        matrices.translate(doorOffset, 0.0F, 0.0F);
+        renderDoorMeshes(
                 matrices,
                 consumers,
-                0.05F + doorOffset,
-                0.95F + doorOffset,
-                0.5F + doorOffset,
-                false,
-                psd.displayProperties(),
+                RIGHT_DOOR_WHITE_MODEL,
+                RIGHT_DOOR_DARK_MODEL,
+                RIGHT_DOOR_GLASS_MODEL,
+                RIGHT_DOOR_THRESHOLD_MODEL,
                 light
         );
+        renderCaution(matrices, consumers, 0.5F, light);
+        if (!psd.displayProperties().platformNumber().isBlank()) {
+            renderCenteredText(
+                    client,
+                    matrices,
+                    consumers,
+                    psd.displayProperties().platformNumber(),
+                    0.5F,
+                    0.63F,
+                    FRONT_OVERLAY_Z + 0.002F,
+                    0.010F,
+                    0xFFF0F0F0,
+                    light
+            );
+        }
+        matrices.pop();
 
-        final boolean indicatorLit = indicatorLit(psd);
-        renderCuboid(
-                matrices,
-                consumers,
-                indicatorLit ? INDICATOR_ON : INDICATOR_OFF,
-                0.72F,
-                2.67F,
-                -0.155F,
-                0.22F,
-                0.22F,
-                DECAL_DEPTH,
-                light,
-                true
-        );
-
+        renderIndicator(matrices, consumers, indicatorLit(psd), light);
         renderHeaderText(client, matrices, consumers, psd.displayProperties(), light);
     }
 
-    /**
-     * Adds the standard 1.5-block glass wings to a two-block door renderer.
-     * Used by every legacy/native door pack so all placed PSD assemblies share
-     * the same five-block footprint and center anchor.
-     */
+    /** Adds the standard clean 1.5-block glass wings to a native two-door pack. */
     static void renderCompanionGlass(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
             int light
     ) {
-        renderCuboid(matrices, consumers, WHITE_METAL, -2.5F, 2.0F, -0.14F, 1.5F, 1.0F, 0.28F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, 1.0F, 2.0F, -0.14F, 1.5F, 1.0F, 0.28F, light, false);
-        renderPost(matrices, consumers, -2.50F, light);
-        renderPost(matrices, consumers, -1.00F, light);
-        renderPost(matrices, consumers, 1.00F, light);
-        renderPost(matrices, consumers, 2.50F, light);
-        renderCuboid(matrices, consumers, WHITE_METAL, -2.5F, 0.0F, -0.12F, 1.5F, RAIL_HEIGHT, 0.24F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, 1.0F, 0.0F, -0.12F, 1.5F, RAIL_HEIGHT, 0.24F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, -2.5F, 1.90F, -0.12F, 1.5F, RAIL_HEIGHT, 0.24F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, 1.0F, 1.90F, -0.12F, 1.5F, RAIL_HEIGHT, 0.24F, light, false);
-        renderGlassPanel(matrices, consumers, -2.45F, -1.05F, light);
-        renderGlassPanel(matrices, consumers, 1.05F, 2.45F, light);
+        renderMesh(matrices, consumers, HEADER_WINGS_MODEL, WHITE_METAL, light, false);
+        renderSideAssembly(matrices, consumers, light);
     }
 
-    private static void renderPost(
+    private static void renderSideAssembly(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            int light
+    ) {
+        renderMesh(matrices, consumers, SIDE_WHITE_MODEL, WHITE_METAL, light, false);
+        renderMesh(matrices, consumers, SIDE_DARK_MODEL, DARK_FRAME, light, false);
+        renderMesh(matrices, consumers, SIDE_GLASS_MODEL, GLASS, light, true);
+        renderMesh(matrices, consumers, SIDE_THRESHOLD_MODEL, THRESHOLD, light, false);
+    }
+
+    private static void renderDoorMeshes(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            Identifier whiteModel,
+            Identifier darkModel,
+            Identifier glassModel,
+            Identifier thresholdModel,
+            int light
+    ) {
+        renderMesh(matrices, consumers, whiteModel, WHITE_METAL, light, false);
+        renderMesh(matrices, consumers, darkModel, DARK_FRAME, light, false);
+        renderMesh(matrices, consumers, glassModel, GLASS, light, true);
+        renderMesh(matrices, consumers, thresholdModel, THRESHOLD, light, false);
+    }
+
+    private static void renderCaution(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
             float centerX,
             int light
     ) {
-        renderCuboid(
-                matrices,
-                consumers,
-                WHITE_METAL,
-                centerX - POST_WIDTH / 2.0F,
-                0.0F,
-                -FRAME_DEPTH / 2.0F,
-                POST_WIDTH,
-                2.0F,
-                FRAME_DEPTH,
-                light,
-                false
-        );
-    }
-
-    private static void renderGlassPanel(
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            float minX,
-            float maxX,
-            int light
-    ) {
-        renderCuboid(
-                matrices,
-                consumers,
-                GLASS,
-                minX,
-                0.10F,
-                -GLASS_DEPTH / 2.0F,
-                maxX - minX,
-                1.80F,
-                GLASS_DEPTH,
-                light,
-                true
-        );
-    }
-
-    private static void renderDoorLeaf(
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            float minX,
-            float maxX,
-            float decalCenterX,
-            boolean leftDoor,
-            PSDDisplayProperties properties,
-            int light
-    ) {
-        renderCuboid(
-                matrices,
-                consumers,
-                GLASS,
-                minX,
-                0.10F,
-                -GLASS_DEPTH / 2.0F,
-                maxX - minX,
-                1.80F,
-                GLASS_DEPTH,
-                light,
-                true
-        );
-
-        // Moving door frame edges.
-        renderCuboid(matrices, consumers, WHITE_METAL, minX, 0.0F, -0.12F, 0.08F, 2.0F, 0.24F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, maxX - 0.08F, 0.0F, -0.12F, 0.08F, 2.0F, 0.24F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, minX, 0.0F, -0.12F, maxX - minX, 0.09F, 0.24F, light, false);
-        renderCuboid(matrices, consumers, WHITE_METAL, minX, 1.91F, -0.12F, maxX - minX, 0.09F, 0.24F, light, false);
-
-        // Caution signs are present on both left and right doors.
-        renderCuboid(
+        renderFrontQuad(
                 matrices,
                 consumers,
                 CAUTION,
-                decalCenterX - 0.16F,
+                centerX - 0.30F,
                 0.92F,
-                -0.135F,
-                0.32F,
-                0.46F,
-                DECAL_DEPTH,
-                light,
-                true
-        );
-
-        // Platform number appears below the warning sign on the right door only.
-        if (!leftDoor && !properties.platformNumber().isBlank()) {
-            renderCenteredText(
-                    MinecraftClient.getInstance(),
-                    matrices,
-                    consumers,
-                    properties.platformNumber(),
-                    decalCenterX,
-                    0.68F,
-                    0.142F,
-                    0.010F,
-                    0xFF222222,
-                    light
-            );
-        }
-
-        // Brushed threshold beneath the moving door pair.
-        renderCuboid(
-                matrices,
-                consumers,
-                THRESHOLD,
-                minX,
-                0.0F,
-                -0.145F,
-                maxX - minX,
-                0.08F,
-                0.29F,
+                centerX + 0.30F,
+                1.30F,
+                FRONT_OVERLAY_Z,
                 light,
                 false
         );
+    }
+
+    private static void renderIndicator(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            boolean lit,
+            int light
+    ) {
+        renderFrontQuad(
+                matrices,
+                consumers,
+                lit ? INDICATOR_ON : INDICATOR_OFF,
+                -0.16F,
+                2.06F,
+                0.16F,
+                2.16F,
+                0.211F,
+                light,
+                true
+        );
+    }
+
+    private static void renderMesh(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            Identifier model,
+            Identifier texture,
+            int light,
+            boolean translucent
+    ) {
+        final ObjMesh mesh = ObjMeshCache.get(model);
+        final VertexConsumer vertices = consumers.getBuffer(
+                translucent
+                        ? RenderLayer.getEntityTranslucent(texture)
+                        : RenderLayer.getEntityCutoutNoCull(texture)
+        );
+        mesh.render(matrices, vertices, light);
+    }
+
+    private static void renderFrontQuad(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            Identifier texture,
+            float minX,
+            float minY,
+            float maxX,
+            float maxY,
+            float z,
+            int light,
+            boolean translucent
+    ) {
+        final VertexConsumer vertices = consumers.getBuffer(
+                translucent
+                        ? RenderLayer.getEntityTranslucent(texture)
+                        : RenderLayer.getEntityCutoutNoCull(texture)
+        );
+        final MatrixStack.Entry entry = matrices.peek();
+        final Matrix4f position = entry.getPositionMatrix();
+        final Matrix3f normal = entry.getNormalMatrix();
+
+        vertex(vertices, position, normal, minX, minY, z, 0.0F, 1.0F, light);
+        vertex(vertices, position, normal, maxX, minY, z, 1.0F, 1.0F, light);
+        vertex(vertices, position, normal, maxX, maxY, z, 1.0F, 0.0F, light);
+        vertex(vertices, position, normal, minX, maxY, z, 0.0F, 0.0F, light);
+    }
+
+    private static void vertex(
+            VertexConsumer consumer,
+            Matrix4f position,
+            Matrix3f normal,
+            float x,
+            float y,
+            float z,
+            float u,
+            float v,
+            int light
+    ) {
+        consumer.vertex(position, x, y, z)
+                .color(255, 255, 255, 255)
+                .texture(u, v)
+                .overlay(OverlayTexture.DEFAULT_UV)
+                .light(light)
+                .normal(normal, 0.0F, 0.0F, 1.0F)
+                .next();
     }
 
     private static void renderHeaderText(
@@ -279,10 +265,10 @@ final class SeoulBulkyWhiteRenderer {
         final boolean arrowRight = properties.arrowRight();
         final String arrow = arrowRight ? "→" : "←";
 
-        final float previousX = arrowRight ? -1.72F : 1.72F;
-        final float currentX = arrowRight ? -0.47F : 0.47F;
-        final float arrowX = 0.52F;
-        final float nextX = arrowRight ? 1.45F : -1.45F;
+        final float previousX = arrowRight ? -1.78F : 1.78F;
+        final float currentX = arrowRight ? -0.46F : 0.46F;
+        final float arrowX = arrowRight ? 0.76F : -0.76F;
+        final float nextX = arrowRight ? 1.73F : -1.73F;
 
         renderStationPair(
                 client,
@@ -291,7 +277,7 @@ final class SeoulBulkyWhiteRenderer {
                 properties.previousStationKorean(),
                 properties.previousStationEnglish(),
                 previousX,
-                0xFF7A7A7A,
+                0xFF777777,
                 light
         );
         renderStationPair(
@@ -310,9 +296,9 @@ final class SeoulBulkyWhiteRenderer {
                 consumers,
                 arrow,
                 arrowX,
-                2.50F,
-                0.148F,
-                0.015F,
+                2.49F,
+                0.211F,
+                0.016F,
                 0xFF111111,
                 light
         );
@@ -328,30 +314,24 @@ final class SeoulBulkyWhiteRenderer {
         );
 
         if (!properties.currentStationCode().isBlank()) {
-            renderCenteredText(
+            renderBadgeText(
                     client,
                     matrices,
                     consumers,
                     properties.currentStationCode(),
-                    currentX - 0.48F,
-                    2.49F,
-                    0.149F,
-                    0.0085F,
-                    0xFF6F2DA8,
+                    currentX - 0.61F,
+                    2.52F,
                     light
             );
         }
         if (!properties.lineNumber().isBlank()) {
-            renderCenteredText(
+            renderBadgeText(
                     client,
                     matrices,
                     consumers,
                     properties.lineNumber(),
-                    -2.27F,
-                    2.49F,
-                    0.149F,
-                    0.010F,
-                    0xFF6F2DA8,
+                    -2.26F,
+                    2.52F,
                     light
             );
         }
@@ -374,9 +354,9 @@ final class SeoulBulkyWhiteRenderer {
                     consumers,
                     korean,
                     centerX,
-                    2.66F,
-                    0.148F,
-                    0.0095F,
+                    2.61F,
+                    0.211F,
+                    0.010F,
                     color,
                     light
             );
@@ -388,13 +368,48 @@ final class SeoulBulkyWhiteRenderer {
                     consumers,
                     english,
                     centerX,
-                    2.43F,
-                    0.148F,
+                    2.40F,
+                    0.211F,
                     0.0065F,
                     color,
                     light
             );
         }
+    }
+
+    private static void renderBadgeText(
+            MinecraftClient client,
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            String text,
+            float centerX,
+            float centerY,
+            int light
+    ) {
+        renderFrontQuad(
+                matrices,
+                consumers,
+                DARK_FRAME,
+                centerX - 0.115F,
+                centerY - 0.115F,
+                centerX + 0.115F,
+                centerY + 0.115F,
+                0.2105F,
+                light,
+                false
+        );
+        renderCenteredText(
+                client,
+                matrices,
+                consumers,
+                text,
+                centerX,
+                centerY + 0.015F,
+                0.212F,
+                0.0075F,
+                0xFFFFFFFF,
+                light
+        );
     }
 
     private static void renderCenteredText(
@@ -434,57 +449,6 @@ final class SeoulBulkyWhiteRenderer {
         matrices.pop();
     }
 
-    private static void renderCuboid(
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            Identifier texture,
-            float x,
-            float y,
-            float z,
-            float width,
-            float height,
-            float depth,
-            int light,
-            boolean translucent
-    ) {
-        final ModelPart.Cuboid cuboid = new ModelPart.Cuboid(
-                0,
-                0,
-                x * 16.0F,
-                -(y + height) * 16.0F,
-                z * 16.0F,
-                width * 16.0F,
-                height * 16.0F,
-                depth * 16.0F,
-                0.0F,
-                0.0F,
-                0.0F,
-                false,
-                ATLAS_SIZE,
-                ATLAS_SIZE,
-                EnumSet.allOf(Direction.class)
-        );
-
-        matrices.push();
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(180.0F));
-        final VertexConsumer vertices = consumers.getBuffer(
-                translucent
-                        ? RenderLayer.getEntityTranslucent(texture)
-                        : RenderLayer.getEntityCutoutNoCull(texture)
-        );
-        cuboid.renderCuboid(
-                matrices.peek(),
-                vertices,
-                light,
-                OverlayTexture.DEFAULT_UV,
-                1.0F,
-                1.0F,
-                1.0F,
-                1.0F
-        );
-        matrices.pop();
-    }
-
     private static boolean indicatorLit(ClientPSDObject psd) {
         final long now = Util.getMeasuringTimeMs();
         final DoorMotionMemory memory = DOOR_MOTION.computeIfAbsent(
@@ -510,8 +474,19 @@ final class SeoulBulkyWhiteRenderer {
             return true;
         }
 
-        // Opening and closing: 0.5 seconds on, 0.5 seconds off, repeating.
         return ((now - memory.transitionStarted) / 500L) % 2L == 0L;
+    }
+
+    private static double clampDoorValue(double value) {
+        return Math.max(0.0D, Math.min(1.0D, value));
+    }
+
+    private static Identifier model(String name) {
+        return MetroBuilder.id(MODEL_ROOT + name + ".obj");
+    }
+
+    private static Identifier texture(String name) {
+        return MetroBuilder.id("textures/psd/seoul_bulky_white/" + name + ".png");
     }
 
     private static final class DoorMotionMemory {
