@@ -1,0 +1,7 @@
+{
+  "format_version": 1,
+  "name": "Seoul Metro Bulky White",
+  "renderer": "metrobuilder:seoul_bulky_white",
+  "volume": 1.0,
+  "pitch": 1.0
+}

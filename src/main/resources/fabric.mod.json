@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "metrobuilder",
+  "version": "${version}",
+  "name": "MetroBuilder",
+  "description": "Precision platform screen door building tools for Minecraft Transit Railway.",
+  "authors": [
+    "thekimcreates"
+  ],
+  "license": "MIT",
+  "icon": "assets/metrobuilder/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.thekimcreates.metrobuilder.MetroBuilder"
+    ],
+    "client": [
+      "dev.thekimcreates.metrobuilder.client.MetroBuilderClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "minecraft": "~1.20.4",
+    "java": ">=17",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "mtr": "*",
+    "tjmetro": "*"
+  }
+}
