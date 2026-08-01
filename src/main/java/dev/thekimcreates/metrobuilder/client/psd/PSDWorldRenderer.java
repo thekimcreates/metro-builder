@@ -136,17 +136,25 @@ public final class PSDWorldRenderer {
         final BlockState lowerLeft = createDoorState("lower", "left");
         final BlockState lowerRight = createDoorState("lower", "right");
 
-        // Bottom row: left and right door quarters.
-        renderDoorQuarter(client, matrices, consumers, transform, lowerLeft, TJ_BOTTOM_LEFT_TEXTURE, -0.5F, 0.0F, -0.5D, 0.5D, 0.0D);
-        renderDoorQuarter(client, matrices, consumers, transform, lowerRight, TJ_BOTTOM_RIGHT_TEXTURE, 0.5F, 0.0F, 0.5D, 0.5D, 0.0D);
+        /*
+         * TJMetro's LEFT/RIGHT properties are defined from the PSD's own front
+         * face. The precision renderer's local X axis appears reversed when the
+         * assembly is viewed from that front, so the complete columns must be
+         * mounted on the opposite local-X positions. We swap the columns as
+         * whole units; the models and UVs themselves are never mirrored.
+         */
 
-        // Middle row: left and right door quarters.
-        renderDoorQuarter(client, matrices, consumers, transform, upperLeft, TJ_TOP_LEFT_TEXTURE, -0.5F, 1.0F, -0.5D, 1.5D, 0.0D);
-        renderDoorQuarter(client, matrices, consumers, transform, upperRight, TJ_TOP_RIGHT_TEXTURE, 0.5F, 1.0F, 0.5D, 1.5D, 0.0D);
+        // Bottom row: RIGHT state on local-left, LEFT state on local-right.
+        renderDoorQuarter(client, matrices, consumers, transform, lowerRight, TJ_BOTTOM_RIGHT_TEXTURE, -0.5F, 0.0F, -0.5D, 0.5D, 0.0D);
+        renderDoorQuarter(client, matrices, consumers, transform, lowerLeft, TJ_BOTTOM_LEFT_TEXTURE, 0.5F, 0.0F, 0.5D, 0.5D, 0.0D);
 
-        // Top row: exact TJMetro multipart baked models. No extra front/back panes.
-        renderBakedBlock(client, matrices, consumers, transform, topLeft, -1.0F, 2.0F, -0.5F, -0.5D, 2.5D, 0.0D);
-        renderBakedBlock(client, matrices, consumers, transform, topRight, 0.0F, 2.0F, -0.5F, 0.5D, 2.5D, 0.0D);
+        // Middle row: keep each upper piece with the matching bottom piece.
+        renderDoorQuarter(client, matrices, consumers, transform, upperRight, TJ_TOP_RIGHT_TEXTURE, -0.5F, 1.0F, -0.5D, 1.5D, 0.0D);
+        renderDoorQuarter(client, matrices, consumers, transform, upperLeft, TJ_TOP_LEFT_TEXTURE, 0.5F, 1.0F, 0.5D, 1.5D, 0.0D);
+
+        // Top row: swap the complete LEFT/RIGHT top models in the same way.
+        renderBakedBlock(client, matrices, consumers, transform, topRight, -1.0F, 2.0F, -0.5F, -0.5D, 2.5D, 0.0D);
+        renderBakedBlock(client, matrices, consumers, transform, topLeft, 0.0F, 2.0F, -0.5F, 0.5D, 2.5D, 0.0D);
     }
 
     private static BlockState createDoorState(String half, String side) {
