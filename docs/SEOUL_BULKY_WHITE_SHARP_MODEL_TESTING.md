@@ -12,6 +12,9 @@
    - solid white frame geometry with dark inset frames;
    - caution signs on both doors;
    - platform number on the right door only;
+   - fixed side glass and frames visibly in front of the rear sliding-door rail;
+   - clear side pockets that accept each moving door leaf without clipping;
+   - centered, collision-free header text with no standalone far-left line number;
    - no standalone line-number badge at the far-left side of the header.
 
 The primary rendering correction emits each triangulated OBJ face as a degenerate quad because Minecraft's entity render layers use QUADS. The previous three-vertex emission merged unrelated triangles into giant malformed quads.

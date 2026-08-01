@@ -51,7 +51,7 @@ final class SeoulBulkyWhiteRenderer {
     private static final Identifier INDICATOR_ON = texture("indicator_on");
     private static final Identifier INDICATOR_OFF = texture("indicator_off");
 
-    private static final float FRONT_OVERLAY_Z = 0.182F;
+    private static final float DOOR_OVERLAY_Z = 0.058F;
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
 
     private SeoulBulkyWhiteRenderer() {
@@ -67,8 +67,8 @@ final class SeoulBulkyWhiteRenderer {
         final float doorOffset = (float) (clampDoorValue(psd.doorValue()) * 0.82D);
 
         renderMesh(matrices, consumers, HEADER_MODEL, WHITE_METAL, light, false);
-        renderSideAssembly(matrices, consumers, light);
 
+        // Rear sliding rail: opening leaves travel into the clear side pockets.
         matrices.push();
         matrices.translate(-doorOffset, 0.0F, 0.0F);
         renderDoorMeshes(
@@ -103,13 +103,16 @@ final class SeoulBulkyWhiteRenderer {
                     psd.displayProperties().platformNumber(),
                     0.5F,
                     0.63F,
-                    FRONT_OVERLAY_Z + 0.002F,
+                    DOOR_OVERLAY_Z + 0.002F,
                     0.010F,
                     0xFFF0F0F0,
                     light
             );
         }
         matrices.pop();
+
+        // Fixed panels are a physically separate front layer.
+        renderSideAssembly(matrices, consumers, light);
 
         renderIndicator(matrices, consumers, indicatorLit(psd), light);
         renderHeaderText(client, matrices, consumers, psd.displayProperties(), light);
@@ -165,7 +168,7 @@ final class SeoulBulkyWhiteRenderer {
                 0.92F,
                 centerX + 0.30F,
                 1.30F,
-                FRONT_OVERLAY_Z,
+                DOOR_OVERLAY_Z,
                 light,
                 false
         );
@@ -265,10 +268,10 @@ final class SeoulBulkyWhiteRenderer {
         final boolean arrowRight = properties.arrowRight();
         final String arrow = arrowRight ? "→" : "←";
 
-        final float previousX = arrowRight ? -1.78F : 1.78F;
-        final float currentX = arrowRight ? -0.46F : 0.46F;
-        final float arrowX = arrowRight ? 0.76F : -0.76F;
-        final float nextX = arrowRight ? 1.73F : -1.73F;
+        final float previousX = arrowRight ? -1.67F : 1.67F;
+        final float currentX = 0.0F;
+        final float arrowX = arrowRight ? 0.84F : -0.84F;
+        final float nextX = arrowRight ? 1.67F : -1.67F;
 
         renderStationPair(
                 client,
@@ -278,6 +281,7 @@ final class SeoulBulkyWhiteRenderer {
                 properties.previousStationEnglish(),
                 previousX,
                 0xFF777777,
+                1.20F,
                 light
         );
         renderStationPair(
@@ -288,6 +292,7 @@ final class SeoulBulkyWhiteRenderer {
                 properties.currentStationEnglish(),
                 currentX,
                 0xFF111111,
+                1.25F,
                 light
         );
         renderCenteredText(
@@ -310,6 +315,7 @@ final class SeoulBulkyWhiteRenderer {
                 properties.nextStationEnglish(),
                 nextX,
                 0xFF222222,
+                1.20F,
                 light
         );
 
@@ -319,8 +325,8 @@ final class SeoulBulkyWhiteRenderer {
                     matrices,
                     consumers,
                     properties.currentStationCode(),
-                    currentX - 0.61F,
-                    2.52F,
+                    currentX,
+                    2.20F,
                     light
             );
         }
@@ -334,10 +340,11 @@ final class SeoulBulkyWhiteRenderer {
             String english,
             float centerX,
             int color,
+            float maxWidth,
             int light
     ) {
         if (!korean.isBlank()) {
-            renderCenteredText(
+            renderFittedCenteredText(
                     client,
                     matrices,
                     consumers,
@@ -346,12 +353,13 @@ final class SeoulBulkyWhiteRenderer {
                     2.61F,
                     0.211F,
                     0.010F,
+                    maxWidth,
                     color,
                     light
             );
         }
         if (!english.isBlank()) {
-            renderCenteredText(
+            renderFittedCenteredText(
                     client,
                     matrices,
                     consumers,
@@ -360,10 +368,32 @@ final class SeoulBulkyWhiteRenderer {
                     2.40F,
                     0.211F,
                     0.0065F,
+                    maxWidth,
                     color,
                     light
             );
         }
+    }
+
+    private static void renderFittedCenteredText(
+            MinecraftClient client,
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            String text,
+            float x,
+            float y,
+            float z,
+            float preferredScale,
+            float maxWidth,
+            int color,
+            int light
+    ) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        final int pixelWidth = Math.max(1, client.textRenderer.getWidth(text));
+        final float fittedScale = Math.min(preferredScale, maxWidth / pixelWidth);
+        renderCenteredText(client, matrices, consumers, text, x, y, z, fittedScale, color, light);
     }
 
     private static void renderBadgeText(
