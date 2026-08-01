@@ -57,10 +57,12 @@ DOOR_DARK_BACK, DOOR_DARK_FRONT = -0.125, 0.045
 DOOR_GLASS_BACK, DOOR_GLASS_FRONT = -0.035, 0.000
 DOOR_THRESHOLD_BACK, DOOR_THRESHOLD_FRONT = -0.175, 0.055
 
-PANEL_WHITE_BACK, PANEL_WHITE_FRONT = 0.070, 0.190
-PANEL_DARK_BACK, PANEL_DARK_FRONT = 0.090, 0.200
-PANEL_GLASS_BACK, PANEL_GLASS_FRONT = 0.135, 0.170
-PANEL_THRESHOLD_BACK, PANEL_THRESHOLD_FRONT = 0.060, 0.205
+# The front faces stay ahead of the doors, but the panel bodies extend back to
+# the rear rail so there is no visible air gap when viewed from either side.
+PANEL_WHITE_BACK, PANEL_WHITE_FRONT = -0.020, 0.100
+PANEL_DARK_BACK, PANEL_DARK_FRONT = -0.010, 0.110
+PANEL_GLASS_BACK, PANEL_GLASS_FRONT = -0.005, 0.030
+PANEL_THRESHOLD_BACK, PANEL_THRESHOLD_FRONT = -0.030, 0.115
 
 # Straight, sharp, single-row header. No rounded or chamfered corners.
 model = Obj("header")

@@ -11,6 +11,9 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.OrderedText;
+import net.minecraft.text.Style;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.RotationAxis;
@@ -50,6 +53,7 @@ final class SeoulBulkyWhiteRenderer {
     private static final Identifier CAUTION = texture("caution");
     private static final Identifier INDICATOR_ON = texture("indicator_on");
     private static final Identifier INDICATOR_OFF = texture("indicator_off");
+    private static final Identifier UNIFORM_FONT = new Identifier("minecraft", "uniform");
 
     private static final float DOOR_OVERLAY_Z = 0.058F;
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
@@ -96,16 +100,12 @@ final class SeoulBulkyWhiteRenderer {
         );
         renderCaution(matrices, consumers, 0.5F, light);
         if (!psd.displayProperties().platformNumber().isBlank()) {
-            renderCenteredText(
+            renderDoorNumberLabel(
                     client,
                     matrices,
                     consumers,
                     psd.displayProperties().platformNumber(),
                     0.5F,
-                    0.63F,
-                    DOOR_OVERLAY_Z + 0.002F,
-                    0.010F,
-                    0xFFF0F0F0,
                     light
             );
         }
@@ -165,12 +165,46 @@ final class SeoulBulkyWhiteRenderer {
                 consumers,
                 CAUTION,
                 centerX - 0.30F,
-                0.92F,
+                1.17F,
                 centerX + 0.30F,
-                1.30F,
+                1.55F,
                 DOOR_OVERLAY_Z,
                 light,
                 false
+        );
+    }
+
+    private static void renderDoorNumberLabel(
+            MinecraftClient client,
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            String number,
+            float centerX,
+            int light
+    ) {
+        renderFrontQuad(
+                matrices,
+                consumers,
+                DARK_FRAME,
+                centerX - 0.30F,
+                0.94F,
+                centerX + 0.30F,
+                1.10F,
+                DOOR_OVERLAY_Z,
+                light,
+                false
+        );
+        renderCenteredText(
+                client,
+                matrices,
+                consumers,
+                number,
+                centerX,
+                0.985F,
+                DOOR_OVERLAY_Z + 0.002F,
+                0.008F,
+                0xFFFFFFFF,
+                light
         );
     }
 
@@ -184,10 +218,10 @@ final class SeoulBulkyWhiteRenderer {
                 matrices,
                 consumers,
                 lit ? INDICATOR_ON : INDICATOR_OFF,
-                -0.16F,
-                2.06F,
-                0.16F,
-                2.16F,
+                -0.25F,
+                2.045F,
+                0.25F,
+                2.17F,
                 0.211F,
                 light,
                 true
@@ -269,8 +303,8 @@ final class SeoulBulkyWhiteRenderer {
         final String arrow = arrowRight ? "→" : "←";
 
         final float previousX = arrowRight ? -1.67F : 1.67F;
-        final float currentX = 0.0F;
-        final float arrowX = arrowRight ? 0.84F : -0.84F;
+        final float currentX = arrowRight ? 0.18F : -0.18F;
+        final float arrowX = arrowRight ? 0.92F : -0.92F;
         final float nextX = arrowRight ? 1.67F : -1.67F;
 
         renderStationPair(
@@ -325,8 +359,8 @@ final class SeoulBulkyWhiteRenderer {
                     matrices,
                     consumers,
                     properties.currentStationCode(),
-                    currentX,
-                    2.20F,
+                    currentX + (arrowRight ? -0.68F : 0.68F),
+                    2.52F,
                     light
             );
         }
@@ -344,7 +378,7 @@ final class SeoulBulkyWhiteRenderer {
             int light
     ) {
         if (!korean.isBlank()) {
-            renderFittedCenteredText(
+            renderFittedHeaderText(
                     client,
                     matrices,
                     consumers,
@@ -355,11 +389,12 @@ final class SeoulBulkyWhiteRenderer {
                     0.010F,
                     maxWidth,
                     color,
+                    true,
                     light
             );
         }
         if (!english.isBlank()) {
-            renderFittedCenteredText(
+            renderFittedHeaderText(
                     client,
                     matrices,
                     consumers,
@@ -370,12 +405,13 @@ final class SeoulBulkyWhiteRenderer {
                     0.0065F,
                     maxWidth,
                     color,
+                    false,
                     light
             );
         }
     }
 
-    private static void renderFittedCenteredText(
+    private static void renderFittedHeaderText(
             MinecraftClient client,
             MatrixStack matrices,
             VertexConsumerProvider consumers,
@@ -386,14 +422,18 @@ final class SeoulBulkyWhiteRenderer {
             float preferredScale,
             float maxWidth,
             int color,
+            boolean bold,
             int light
     ) {
         if (text == null || text.isBlank()) {
             return;
         }
-        final int pixelWidth = Math.max(1, client.textRenderer.getWidth(text));
+        final OrderedText formatted = Text.literal(text)
+                .setStyle(Style.EMPTY.withFont(UNIFORM_FONT).withBold(bold))
+                .asOrderedText();
+        final int pixelWidth = Math.max(1, client.textRenderer.getWidth(formatted));
         final float fittedScale = Math.min(preferredScale, maxWidth / pixelWidth);
-        renderCenteredText(client, matrices, consumers, text, x, y, z, fittedScale, color, light);
+        renderCenteredText(client, matrices, consumers, formatted, x, y, z, fittedScale, color, light);
     }
 
     private static void renderBadgeText(
@@ -456,6 +496,38 @@ final class SeoulBulkyWhiteRenderer {
         renderer.draw(
                 text,
                 textX,
+                0.0F,
+                color,
+                false,
+                matrices.peek().getPositionMatrix(),
+                consumers,
+                TextRenderer.TextLayerType.POLYGON_OFFSET,
+                0,
+                light
+        );
+        matrices.pop();
+    }
+
+    private static void renderCenteredText(
+            MinecraftClient client,
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            OrderedText text,
+            float x,
+            float y,
+            float z,
+            float scale,
+            int color,
+            int light
+    ) {
+        final TextRenderer renderer = client.textRenderer;
+        matrices.push();
+        matrices.translate(x, y, z);
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0F));
+        matrices.scale(-scale, -scale, scale);
+        renderer.draw(
+                text,
+                -renderer.getWidth(text) / 2.0F,
                 0.0F,
                 color,
                 false,
