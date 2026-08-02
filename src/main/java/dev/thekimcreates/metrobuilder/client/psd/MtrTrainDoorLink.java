@@ -12,7 +12,7 @@ import java.util.OptionalDouble;
 
 /** Optional reflection bridge for following the nearest MTR train's door animation. */
 final class MtrTrainDoorLink {
-    private static final double LINK_DISTANCE = 12.0D;
+    private static final double LINK_DISTANCE = 5.0D;
     private static final double LINK_DISTANCE_SQUARED = LINK_DISTANCE * LINK_DISTANCE;
 
     private static boolean initializationAttempted;

@@ -22,6 +22,7 @@ import org.joml.Matrix4f;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.UUID;
 
 /** Renders the five-block Seoul Metro Bulky White PSD from authored OBJ meshes. */
@@ -56,7 +57,9 @@ final class SeoulBulkyWhiteRenderer {
     private static final Identifier UNIFORM_FONT = new Identifier("minecraft", "uniform");
 
     private static final float DOOR_OVERLAY_Z = 0.058F;
+    private static final long DOOR_TRAVEL_TIME_MS = 2_000L;
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
+    private static final Map<UUID, LinkedDoorMemory> LINKED_DOOR_MOTION = new HashMap<>();
 
     private SeoulBulkyWhiteRenderer() {
     }
@@ -68,9 +71,9 @@ final class SeoulBulkyWhiteRenderer {
             ClientPSDObject psd,
             int light
     ) {
-        final double effectiveDoorValue = MtrTrainDoorLink.findDoorValue(client, psd)
-                .orElse(psd.doorValue());
-        final float doorOffset = (float) (clampDoorValue(effectiveDoorValue) * 0.82D);
+        final double effectiveDoorValue = effectiveDoorValue(client, psd);
+        // At 1.0 the moving center edges align exactly with the fixed-panel edges.
+        final float doorOffset = (float) clampDoorValue(effectiveDoorValue);
 
         renderMesh(matrices, consumers, HEADER_MODEL, WHITE_METAL, light, false);
 
@@ -569,6 +572,61 @@ final class SeoulBulkyWhiteRenderer {
         return ((now - memory.transitionStarted) / 500L) % 2L == 0L;
     }
 
+    /**
+     * Starts opening as soon as a train enters the five-block detection zone,
+     * which provides the requested lead before MTR begins its own door motion.
+     * Once the train doors have opened, closing is held until MTR reaches fully
+     * closed; the two-second PSD close then completes even if the train departs.
+     */
+    private static double effectiveDoorValue(MinecraftClient client, ClientPSDObject psd) {
+        final long now = Util.getMeasuringTimeMs();
+        final OptionalDouble trainDoorValue = MtrTrainDoorLink.findDoorValue(client, psd);
+        final LinkedDoorMemory memory = LINKED_DOOR_MOTION.computeIfAbsent(
+                psd.id(),
+                ignored -> new LinkedDoorMemory(clampDoorValue(psd.doorValue()), now)
+        );
+
+        final long elapsed = Math.max(0L, now - memory.lastUpdate);
+        memory.lastUpdate = now;
+
+        if (trainDoorValue.isPresent()) {
+            final double mtrValue = clampDoorValue(trainDoorValue.getAsDouble());
+            if (!memory.trainDetected) {
+                memory.trainDetected = true;
+                memory.sawTrainDoorsOpen = mtrValue > 1.0E-4D;
+                memory.target = 1.0D;
+            } else if (mtrValue > 1.0E-4D) {
+                memory.sawTrainDoorsOpen = true;
+                memory.target = 1.0D;
+            } else if (memory.sawTrainDoorsOpen) {
+                memory.target = 0.0D;
+            }
+        } else if (memory.trainDetected) {
+            if (memory.sawTrainDoorsOpen || memory.target <= 1.0E-4D) {
+                memory.target = 0.0D;
+            } else {
+                // A train that passed the detection zone without opening must
+                // not leave the platform doors stranded open.
+                memory.target = 0.0D;
+            }
+        } else {
+            memory.target = clampDoorValue(psd.doorValue());
+        }
+
+        final double step = elapsed / (double) DOOR_TRAVEL_TIME_MS;
+        if (memory.value < memory.target) {
+            memory.value = Math.min(memory.target, memory.value + step);
+        } else if (memory.value > memory.target) {
+            memory.value = Math.max(memory.target, memory.value - step);
+        }
+
+        if (memory.trainDetected && memory.target <= 1.0E-4D && memory.value <= 1.0E-4D) {
+            memory.trainDetected = false;
+            memory.sawTrainDoorsOpen = false;
+        }
+        return memory.value;
+    }
+
     private static double clampDoorValue(double value) {
         return Math.max(0.0D, Math.min(1.0D, value));
     }
@@ -590,6 +648,20 @@ final class SeoulBulkyWhiteRenderer {
             this.lastValue = lastValue;
             this.direction = direction;
             this.transitionStarted = transitionStarted;
+        }
+    }
+
+    private static final class LinkedDoorMemory {
+        private double value;
+        private double target;
+        private long lastUpdate;
+        private boolean trainDetected;
+        private boolean sawTrainDoorsOpen;
+
+        private LinkedDoorMemory(double value, long lastUpdate) {
+            this.value = value;
+            target = value;
+            this.lastUpdate = lastUpdate;
         }
     }
 }
