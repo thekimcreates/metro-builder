@@ -3,7 +3,6 @@ package dev.thekimcreates.metrobuilder.client.psd;
 import dev.thekimcreates.metrobuilder.MetroBuilder;
 import dev.thekimcreates.metrobuilder.client.model.obj.ObjMesh;
 import dev.thekimcreates.metrobuilder.client.model.obj.ObjMeshCache;
-import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.OverlayTexture;
@@ -11,9 +10,6 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.RotationAxis;
@@ -36,26 +32,21 @@ final class SeoulBulkyWhiteRenderer {
     private static final Identifier SIDE_WHITE_MODEL = model("side_white");
     private static final Identifier SIDE_DARK_MODEL = model("side_dark");
     private static final Identifier SIDE_GLASS_MODEL = model("side_glass");
-    private static final Identifier SIDE_THRESHOLD_MODEL = model("side_threshold");
     private static final Identifier LEFT_DOOR_WHITE_MODEL = model("left_door_white");
     private static final Identifier LEFT_DOOR_DARK_MODEL = model("left_door_dark");
     private static final Identifier LEFT_DOOR_GLASS_MODEL = model("left_door_glass");
-    private static final Identifier LEFT_DOOR_THRESHOLD_MODEL = model("left_door_threshold");
     private static final Identifier RIGHT_DOOR_WHITE_MODEL = model("right_door_white");
     private static final Identifier RIGHT_DOOR_DARK_MODEL = model("right_door_dark");
     private static final Identifier RIGHT_DOOR_GLASS_MODEL = model("right_door_glass");
-    private static final Identifier RIGHT_DOOR_THRESHOLD_MODEL = model("right_door_threshold");
 
     private static final Identifier WHITE_METAL = texture("white_metal");
     private static final Identifier DARK_FRAME = texture("dark_frame");
     private static final Identifier GLASS = texture("glass");
-    private static final Identifier THRESHOLD = texture("threshold");
+    private static final Identifier HEADER_SIGN = texture("header");
     private static final Identifier CAUTION = texture("caution");
     private static final Identifier INDICATOR_ON = texture("indicator_on");
     private static final Identifier INDICATOR_OFF = texture("indicator_off");
-    private static final Identifier UNIFORM_FONT = new Identifier("minecraft", "uniform");
-
-    private static final float DOOR_OVERLAY_Z = 0.064F;
+    private static final float DOOR_OVERLAY_Z = 0.002F;
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
 
     private SeoulBulkyWhiteRenderer() {
@@ -75,6 +66,7 @@ final class SeoulBulkyWhiteRenderer {
         final float doorOffset = (float) clampDoorValue(effectiveDoorValue);
 
         renderMesh(matrices, consumers, HEADER_MODEL, WHITE_METAL, light, false);
+        renderHeaderSign(matrices, consumers, light);
 
         // Rear sliding rail: opening leaves travel into the clear side pockets.
         matrices.push();
@@ -85,7 +77,6 @@ final class SeoulBulkyWhiteRenderer {
                 LEFT_DOOR_WHITE_MODEL,
                 LEFT_DOOR_DARK_MODEL,
                 LEFT_DOOR_GLASS_MODEL,
-                LEFT_DOOR_THRESHOLD_MODEL,
                 light
         );
         renderCaution(matrices, consumers, -0.5F, light);
@@ -99,7 +90,6 @@ final class SeoulBulkyWhiteRenderer {
                 RIGHT_DOOR_WHITE_MODEL,
                 RIGHT_DOOR_DARK_MODEL,
                 RIGHT_DOOR_GLASS_MODEL,
-                RIGHT_DOOR_THRESHOLD_MODEL,
                 light
         );
         renderCaution(matrices, consumers, 0.5F, light);
@@ -119,7 +109,6 @@ final class SeoulBulkyWhiteRenderer {
         renderSideAssembly(matrices, consumers, light);
 
         renderIndicator(matrices, consumers, indicatorLit(psd.id(), effectiveDoorValue), light);
-        renderHeaderText(client, matrices, consumers, psd.displayProperties(), light);
     }
 
     /** Adds the standard clean 1.5-block glass wings to a native two-door pack. */
@@ -140,7 +129,6 @@ final class SeoulBulkyWhiteRenderer {
         renderMesh(matrices, consumers, SIDE_WHITE_MODEL, WHITE_METAL, light, false);
         renderMesh(matrices, consumers, SIDE_DARK_MODEL, DARK_FRAME, light, false);
         renderMesh(matrices, consumers, SIDE_GLASS_MODEL, GLASS, light, true);
-        renderMesh(matrices, consumers, SIDE_THRESHOLD_MODEL, THRESHOLD, light, false);
     }
 
     private static void renderDoorMeshes(
@@ -149,13 +137,30 @@ final class SeoulBulkyWhiteRenderer {
             Identifier whiteModel,
             Identifier darkModel,
             Identifier glassModel,
-            Identifier thresholdModel,
             int light
     ) {
         renderMesh(matrices, consumers, whiteModel, WHITE_METAL, light, false);
         renderMesh(matrices, consumers, darkModel, DARK_FRAME, light, false);
         renderMesh(matrices, consumers, glassModel, GLASS, light, true);
-        renderMesh(matrices, consumers, thresholdModel, THRESHOLD, light, false);
+    }
+
+    private static void renderHeaderSign(
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            int light
+    ) {
+        renderFrontQuad(
+                matrices,
+                consumers,
+                HEADER_SIGN,
+                -2.5F,
+                2.1F,
+                2.5F,
+                3.0F,
+                0.181F,
+                light,
+                false
+        );
     }
 
     private static void renderCaution(
@@ -223,9 +228,9 @@ final class SeoulBulkyWhiteRenderer {
                 consumers,
                 lit ? INDICATOR_ON : INDICATOR_OFF,
                 -0.25F,
-                2.045F,
+                2.13F,
                 0.25F,
-                2.17F,
+                2.255F,
                 0.211F,
                 light,
                 true
@@ -296,185 +301,6 @@ final class SeoulBulkyWhiteRenderer {
                 .next();
     }
 
-    private static void renderHeaderText(
-            MinecraftClient client,
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            PSDDisplayProperties properties,
-            int light
-    ) {
-        final boolean arrowRight = properties.arrowRight();
-        final String arrow = arrowRight ? "→" : "←";
-
-        final float previousX = arrowRight ? -1.67F : 1.67F;
-        final float currentX = arrowRight ? 0.18F : -0.18F;
-        final float arrowX = arrowRight ? 0.92F : -0.92F;
-        final float nextX = arrowRight ? 1.67F : -1.67F;
-
-        renderStationPair(
-                client,
-                matrices,
-                consumers,
-                properties.previousStationKorean(),
-                properties.previousStationEnglish(),
-                previousX,
-                0xFF777777,
-                1.20F,
-                light
-        );
-        renderStationPair(
-                client,
-                matrices,
-                consumers,
-                properties.currentStationKorean(),
-                properties.currentStationEnglish(),
-                currentX,
-                0xFF111111,
-                1.25F,
-                light
-        );
-        renderCenteredText(
-                client,
-                matrices,
-                consumers,
-                arrow,
-                arrowX,
-                2.49F,
-                0.211F,
-                0.016F,
-                0xFF111111,
-                light
-        );
-        renderStationPair(
-                client,
-                matrices,
-                consumers,
-                properties.nextStationKorean(),
-                properties.nextStationEnglish(),
-                nextX,
-                0xFF222222,
-                1.20F,
-                light
-        );
-
-        if (!properties.currentStationCode().isBlank()) {
-            renderBadgeText(
-                    client,
-                    matrices,
-                    consumers,
-                    properties.currentStationCode(),
-                    currentX + (arrowRight ? -0.68F : 0.68F),
-                    2.52F,
-                    light
-            );
-        }
-    }
-
-    private static void renderStationPair(
-            MinecraftClient client,
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            String korean,
-            String english,
-            float centerX,
-            int color,
-            float maxWidth,
-            int light
-    ) {
-        if (!korean.isBlank()) {
-            renderFittedHeaderText(
-                    client,
-                    matrices,
-                    consumers,
-                    korean,
-                    centerX,
-                    2.61F,
-                    0.211F,
-                    0.010F,
-                    maxWidth,
-                    color,
-                    true,
-                    light
-            );
-        }
-        if (!english.isBlank()) {
-            renderFittedHeaderText(
-                    client,
-                    matrices,
-                    consumers,
-                    english,
-                    centerX,
-                    2.40F,
-                    0.211F,
-                    0.0065F,
-                    maxWidth,
-                    color,
-                    false,
-                    light
-            );
-        }
-    }
-
-    private static void renderFittedHeaderText(
-            MinecraftClient client,
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            String text,
-            float x,
-            float y,
-            float z,
-            float preferredScale,
-            float maxWidth,
-            int color,
-            boolean bold,
-            int light
-    ) {
-        if (text == null || text.isBlank()) {
-            return;
-        }
-        final OrderedText formatted = Text.literal(text)
-                .setStyle(Style.EMPTY.withFont(UNIFORM_FONT).withBold(bold))
-                .asOrderedText();
-        final int pixelWidth = Math.max(1, client.textRenderer.getWidth(formatted));
-        final float fittedScale = Math.min(preferredScale, maxWidth / pixelWidth);
-        renderCenteredText(client, matrices, consumers, formatted, x, y, z, fittedScale, color, light);
-    }
-
-    private static void renderBadgeText(
-            MinecraftClient client,
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            String text,
-            float centerX,
-            float centerY,
-            int light
-    ) {
-        renderFrontQuad(
-                matrices,
-                consumers,
-                DARK_FRAME,
-                centerX - 0.115F,
-                centerY - 0.115F,
-                centerX + 0.115F,
-                centerY + 0.115F,
-                0.2105F,
-                light,
-                false
-        );
-        renderCenteredText(
-                client,
-                matrices,
-                consumers,
-                text,
-                centerX,
-                centerY + 0.015F,
-                0.212F,
-                0.0075F,
-                0xFFFFFFFF,
-                light
-        );
-    }
-
     private static void renderCenteredText(
             MinecraftClient client,
             MatrixStack matrices,
@@ -500,38 +326,6 @@ final class SeoulBulkyWhiteRenderer {
         renderer.draw(
                 text,
                 textX,
-                0.0F,
-                color,
-                false,
-                matrices.peek().getPositionMatrix(),
-                consumers,
-                TextRenderer.TextLayerType.POLYGON_OFFSET,
-                0,
-                light
-        );
-        matrices.pop();
-    }
-
-    private static void renderCenteredText(
-            MinecraftClient client,
-            MatrixStack matrices,
-            VertexConsumerProvider consumers,
-            OrderedText text,
-            float x,
-            float y,
-            float z,
-            float scale,
-            int color,
-            int light
-    ) {
-        final TextRenderer renderer = client.textRenderer;
-        matrices.push();
-        matrices.translate(x, y, z);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0F));
-        matrices.scale(-scale, -scale, scale);
-        renderer.draw(
-                text,
-                -renderer.getWidth(text) / 2.0F,
                 0.0F,
                 color,
                 false,
