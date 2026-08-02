@@ -50,19 +50,22 @@ class Obj:
 # All dimensions are in Minecraft blocks. The local origin is the center between
 # the two door leaves. The full assembly is exactly five blocks wide and three
 # blocks tall: 1.5 glass + 1 door + 1 door + 1.5 glass.
-# Moving door leaves run on the rear rail. The fixed side panels occupy a
-# separate front layer, leaving an unobstructed pocket for each opening leaf.
-DOOR_WHITE_BACK, DOOR_WHITE_FRONT = -0.165, 0.035
-DOOR_DARK_BACK, DOOR_DARK_FRONT = -0.125, 0.045
-DOOR_GLASS_BACK, DOOR_GLASS_FRONT = -0.035, 0.000
-DOOR_THRESHOLD_BACK, DOOR_THRESHOLD_FRONT = -0.175, 0.055
+# MTR's built-in PSD door and fixed glass are both 2/16 block thick and occupy
+# the same depth plane. Keep the outer profiles identical; the inset materials
+# sit just inside that shared profile to avoid coplanar faces.
+PROFILE_BACK, PROFILE_FRONT = -0.0625, 0.0625
+INSET_BACK, INSET_FRONT = -0.0500, 0.0550
+GLAZING_BACK, GLAZING_FRONT = -0.0400, 0.0400
 
-# The front faces stay ahead of the doors, but the panel bodies extend back to
-# the rear rail so there is no visible air gap when viewed from either side.
-PANEL_WHITE_BACK, PANEL_WHITE_FRONT = -0.020, 0.100
-PANEL_DARK_BACK, PANEL_DARK_FRONT = -0.010, 0.110
-PANEL_GLASS_BACK, PANEL_GLASS_FRONT = -0.005, 0.030
-PANEL_THRESHOLD_BACK, PANEL_THRESHOLD_FRONT = -0.030, 0.115
+DOOR_WHITE_BACK, DOOR_WHITE_FRONT = PROFILE_BACK, PROFILE_FRONT
+DOOR_DARK_BACK, DOOR_DARK_FRONT = INSET_BACK, INSET_FRONT
+DOOR_GLASS_BACK, DOOR_GLASS_FRONT = GLAZING_BACK, GLAZING_FRONT
+DOOR_THRESHOLD_BACK, DOOR_THRESHOLD_FRONT = PROFILE_BACK, PROFILE_FRONT
+
+PANEL_WHITE_BACK, PANEL_WHITE_FRONT = PROFILE_BACK, PROFILE_FRONT
+PANEL_DARK_BACK, PANEL_DARK_FRONT = INSET_BACK, INSET_FRONT
+PANEL_GLASS_BACK, PANEL_GLASS_FRONT = GLAZING_BACK, GLAZING_FRONT
+PANEL_THRESHOLD_BACK, PANEL_THRESHOLD_FRONT = PROFILE_BACK, PROFILE_FRONT
 
 # Straight, sharp, single-row header. No rounded or chamfered corners.
 model = Obj("header")

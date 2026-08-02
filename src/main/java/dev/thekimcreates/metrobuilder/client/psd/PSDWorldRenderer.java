@@ -138,6 +138,8 @@ public final class PSDWorldRenderer {
 
         final boolean seoulBulkyWhite = pack.rendererId()
                 .equals(PSDPackRegistry.SEOUL_BULKY_WHITE_RENDERER);
+        final double mtrDoorValue = MtrTrainDoorLink.findDoorValue(client, psd)
+                .orElse(psd.doorValue());
 
         final BlockState lightState = net.minecraft.block.Blocks.WHITE_CONCRETE.getDefaultState();
         final BlockPos lightPos = sampleWorldPos(transform, 0.0D, 1.5D, 0.0D);
@@ -146,7 +148,7 @@ public final class PSDWorldRenderer {
         if (seoulBulkyWhite) {
             SeoulBulkyWhiteRenderer.render(client, matrices, consumers, psd, assemblyLight);
         } else if (canRenderTjMetro) {
-            renderTianjinAssembly(client, matrices, consumers, transform);
+            renderTianjinAssembly(client, matrices, consumers, transform, mtrDoorValue);
             SeoulBulkyWhiteRenderer.renderCompanionGlass(matrices, consumers, assemblyLight);
         } else {
             if (!warnedMissingTjMetro) {
@@ -185,7 +187,8 @@ public final class PSDWorldRenderer {
             MinecraftClient client,
             MatrixStack matrices,
             VertexConsumerProvider consumers,
-            PrecisionTransform transform
+            PrecisionTransform transform,
+            double doorValue
     ) {
         final BlockState topLeft = createTopState("left");
         final BlockState topRight = createTopState("right");
@@ -202,13 +205,21 @@ public final class PSDWorldRenderer {
          * whole units; the models and UVs themselves are never mirrored.
          */
 
-        // Bottom row: RIGHT state on local-left, LEFT state on local-right.
-        renderDoorQuarter(client, matrices, consumers, transform, lowerRight, TJ_BOTTOM_RIGHT_TEXTURE, -0.5F, 0.0F, -0.5D, 0.5D, 0.0D);
-        renderDoorQuarter(client, matrices, consumers, transform, lowerLeft, TJ_BOTTOM_LEFT_TEXTURE, 0.5F, 0.0F, 0.5D, 0.5D, 0.0D);
+        final float open = (float) Math.max(0.0D, Math.min(1.0D, doorValue));
 
-        // Middle row: keep each upper piece with the matching bottom piece.
+        // MTR's built-in renderer translates each complete leaf directly by
+        // its live door value. Keep the lower and upper quarters together.
+        matrices.push();
+        matrices.translate(-open, 0.0F, 0.0F);
+        renderDoorQuarter(client, matrices, consumers, transform, lowerRight, TJ_BOTTOM_RIGHT_TEXTURE, -0.5F, 0.0F, -0.5D, 0.5D, 0.0D);
         renderDoorQuarter(client, matrices, consumers, transform, upperRight, TJ_TOP_RIGHT_TEXTURE, -0.5F, 1.0F, -0.5D, 1.5D, 0.0D);
+        matrices.pop();
+
+        matrices.push();
+        matrices.translate(open, 0.0F, 0.0F);
+        renderDoorQuarter(client, matrices, consumers, transform, lowerLeft, TJ_BOTTOM_LEFT_TEXTURE, 0.5F, 0.0F, 0.5D, 0.5D, 0.0D);
         renderDoorQuarter(client, matrices, consumers, transform, upperLeft, TJ_TOP_LEFT_TEXTURE, 0.5F, 1.0F, 0.5D, 1.5D, 0.0D);
+        matrices.pop();
 
         // Top row: swap the complete LEFT/RIGHT top models in the same way.
         renderBakedBlock(client, matrices, consumers, transform, topRight, -1.0F, 2.0F, -0.5F, -0.5D, 2.5D, 0.0D);
