@@ -2,349 +2,173 @@ package dev.thekimcreates.metrobuilder.client.screen;
 
 import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
 import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
-import dev.thekimcreates.metrobuilder.psd.PSDPackRegistry;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.function.DoubleConsumer;
 
-/** Non-pausing properties panel for a pending or placed PSD assembly. */
+/** Two-column editor for positioning and the live-rendered Seoul header. */
 public final class PSDPropertiesScreen extends Screen {
+    private static final int ROW = 21;
+    private final Identifier packId;
     private final PrecisionTransform initialTransform;
-    private final PSDDisplayProperties initialDisplayProperties;
+    private final PSDDisplayProperties initial;
     private final SaveCallback saveCallback;
-    private final Runnable deleteCallback;
-    private final DoubleConsumer doorValueCallback;
-
-    private Identifier selectedPackId;
-    private ButtonWidget packButton;
-    private ButtonWidget arrowButton;
-    private TextFieldWidget xField;
-    private TextFieldWidget yField;
-    private TextFieldWidget zField;
-    private TextFieldWidget yawField;
-    private TextFieldWidget currentKoreanField;
-    private TextFieldWidget currentEnglishField;
-    private TextFieldWidget currentCodeField;
-    private TextFieldWidget previousKoreanField;
-    private TextFieldWidget previousEnglishField;
-    private TextFieldWidget nextKoreanField;
-    private TextFieldWidget nextEnglishField;
-    private TextFieldWidget lineField;
-    private TextFieldWidget platformField;
+    private final List<LabeledField> fields = new ArrayList<>();
+    private TextFieldWidget xField, yField, zField, rotationField;
+    private TextFieldWidget lineColorField, platformField;
+    private TextFieldWidget currentKo, currentEn, currentCh, currentJp;
+    private TextFieldWidget nextKo, nextEn, nextCh, nextJp;
+    private TextFieldWidget previousKo, previousEn, previousCh, previousJp;
+    private ButtonWidget directionButton;
     private boolean arrowRight;
     private String errorMessage = "";
 
-    public PSDPropertiesScreen(
-            String title,
-            Identifier packId,
-            PrecisionTransform initialTransform,
-            PSDDisplayProperties initialDisplayProperties,
-            SaveCallback saveCallback
-    ) {
-        this(
-                title,
-                packId,
-                initialTransform,
-                initialDisplayProperties,
-                saveCallback,
-                null,
-                null
-        );
+    public PSDPropertiesScreen(String title, Identifier packId, PrecisionTransform transform,
+                               PSDDisplayProperties properties, SaveCallback saveCallback) {
+        this(title, packId, transform, properties, saveCallback, null, null);
     }
 
-    public PSDPropertiesScreen(
-            String title,
-            Identifier packId,
-            PrecisionTransform initialTransform,
-            PSDDisplayProperties initialDisplayProperties,
-            SaveCallback saveCallback,
-            Runnable deleteCallback
-    ) {
-        this(title, packId, initialTransform, initialDisplayProperties, saveCallback, deleteCallback, null);
+    public PSDPropertiesScreen(String title, Identifier packId, PrecisionTransform transform,
+                               PSDDisplayProperties properties, SaveCallback saveCallback,
+                               Runnable deleteCallback) {
+        this(title, packId, transform, properties, saveCallback, deleteCallback, null);
     }
 
-    public PSDPropertiesScreen(
-            String title,
-            Identifier packId,
-            PrecisionTransform initialTransform,
-            PSDDisplayProperties initialDisplayProperties,
-            SaveCallback saveCallback,
-            Runnable deleteCallback,
-            DoubleConsumer doorValueCallback
-    ) {
+    public PSDPropertiesScreen(String title, Identifier packId, PrecisionTransform transform,
+                               PSDDisplayProperties properties, SaveCallback saveCallback,
+                               Runnable deleteCallback, DoubleConsumer doorValueCallback) {
         super(Text.literal(title));
-        selectedPackId = Objects.requireNonNull(packId, "packId");
-        this.initialTransform = Objects.requireNonNull(initialTransform, "initialTransform");
-        this.initialDisplayProperties = Objects.requireNonNull(
-                initialDisplayProperties,
-                "initialDisplayProperties"
-        );
-        this.saveCallback = Objects.requireNonNull(saveCallback, "saveCallback");
-        this.deleteCallback = deleteCallback;
-        this.doorValueCallback = doorValueCallback;
-        arrowRight = initialDisplayProperties.arrowRight();
+        this.packId = Objects.requireNonNull(packId);
+        this.initialTransform = Objects.requireNonNull(transform);
+        this.initial = Objects.requireNonNull(properties);
+        this.saveCallback = Objects.requireNonNull(saveCallback);
+        this.arrowRight = properties.arrowRight();
     }
 
     @Override
     protected void init() {
-        final int centerX = width / 2;
-        final int top = Math.max(8, height / 2 - 166);
-        final int leftX = centerX - 216;
-        final int rightX = centerX + 18;
-        final int labelWidth = 78;
-        final int fieldWidth = 136;
+        fields.clear();
+        final int panelWidth = Math.min(720, width - 20);
+        final int left = (width - panelWidth) / 2;
+        final int top = Math.max(8, (height - 390) / 2);
+        final int leftFieldX = left + 105;
+        final int rightLabelX = left + panelWidth / 2 + 16;
+        final int rightFieldX = rightLabelX + 116;
+        final int rightFieldWidth = left + panelWidth - 16 - rightFieldX;
 
-        packButton = addDrawableChild(ButtonWidget.builder(
-                        packButtonText(),
-                        button -> cyclePack()
-                )
-                .dimensions(centerX - 105, top + 30, 210, 20)
-                .build());
+        xField = field("X", left + 18, leftFieldX, top + 48, 190, number(initialTransform.x()));
+        yField = field("Y", left + 18, leftFieldX, top + 48 + ROW, 190, number(initialTransform.y()));
+        zField = field("Z", left + 18, leftFieldX, top + 48 + ROW * 2, 190, number(initialTransform.z()));
+        rotationField = field("Rotation", left + 18, leftFieldX, top + 48 + ROW * 3, 190,
+                number(initialTransform.yaw()));
 
-        xField = addNumericField(leftX + labelWidth, top + 70, fieldWidth, initialTransform.x());
-        yField = addNumericField(leftX + labelWidth, top + 96, fieldWidth, initialTransform.y());
-        zField = addNumericField(leftX + labelWidth, top + 122, fieldWidth, initialTransform.z());
-        yawField = addNumericField(leftX + labelWidth, top + 148, fieldWidth, initialTransform.yaw());
+        int y = top + 48;
+        lineColorField = field("Line Color", rightLabelX, rightFieldX, y, rightFieldWidth, initial.lineColor());
+        platformField = field("Platform Number", rightLabelX, rightFieldX, y += ROW,
+                rightFieldWidth, initial.platformNumber());
+        directionButton = addDrawableChild(ButtonWidget.builder(directionText(), button -> {
+            arrowRight = !arrowRight;
+            directionButton.setMessage(directionText());
+        }).dimensions(rightFieldX, y += ROW, rightFieldWidth, 18).build());
 
-        currentKoreanField = addTextField(
-                rightX + labelWidth,
-                top + 70,
-                fieldWidth,
-                initialDisplayProperties.currentStationKorean()
-        );
-        currentEnglishField = addTextField(
-                rightX + labelWidth,
-                top + 96,
-                fieldWidth,
-                initialDisplayProperties.currentStationEnglish()
-        );
-        currentCodeField = addTextField(
-                rightX + labelWidth,
-                top + 122,
-                fieldWidth,
-                initialDisplayProperties.currentStationCode()
-        );
-        previousKoreanField = addTextField(
-                rightX + labelWidth,
-                top + 148,
-                fieldWidth,
-                initialDisplayProperties.previousStationKorean()
-        );
-        previousEnglishField = addTextField(
-                rightX + labelWidth,
-                top + 174,
-                fieldWidth,
-                initialDisplayProperties.previousStationEnglish()
-        );
-        nextKoreanField = addTextField(
-                rightX + labelWidth,
-                top + 200,
-                fieldWidth,
-                initialDisplayProperties.nextStationKorean()
-        );
-        nextEnglishField = addTextField(
-                rightX + labelWidth,
-                top + 226,
-                fieldWidth,
-                initialDisplayProperties.nextStationEnglish()
-        );
-        lineField = addTextField(
-                leftX + labelWidth,
-                top + 200,
-                fieldWidth,
-                initialDisplayProperties.lineNumber()
-        );
-        platformField = addTextField(
-                leftX + labelWidth,
-                top + 226,
-                fieldWidth,
-                initialDisplayProperties.platformNumber()
-        );
+        y += ROW + 5;
+        currentKo = field("Current (ko)", rightLabelX, rightFieldX, y, rightFieldWidth, initial.currentStationKorean());
+        currentEn = field("Current (en)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.currentStationEnglish());
+        currentCh = field("Current (ch)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.currentStationChinese());
+        currentJp = field("Current (jp)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.currentStationJapanese());
+        nextKo = field("Next (ko)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationKorean());
+        nextEn = field("Next (en)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationEnglish());
+        nextCh = field("Next (ch)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationChinese());
+        nextJp = field("Next (jp)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationJapanese());
+        previousKo = field("Previous (ko)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationKorean());
+        previousEn = field("Previous (en)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationEnglish());
+        previousCh = field("Previous (ch)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationChinese());
+        previousJp = field("Previous (jp)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationJapanese());
 
-        arrowButton = addDrawableChild(ButtonWidget.builder(
-                        arrowButtonText(),
-                        button -> {
-                            arrowRight = !arrowRight;
-                            arrowButton.setMessage(arrowButtonText());
-                        }
-                )
-                .dimensions(leftX + labelWidth, top + 252, fieldWidth, 20)
-                .build());
-
-        if (doorValueCallback != null) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("Open Doors"), button -> setDoorValue(1.0D))
-                    .dimensions(centerX - 96, top + 292, 90, 20)
-                    .build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Close Doors"), button -> setDoorValue(0.0D))
-                    .dimensions(centerX + 6, top + 292, 90, 20)
-                    .build());
-        }
-
-        final int actionY = doorValueCallback == null ? top + 292 : top + 316;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> close())
-                .dimensions(centerX - 96, actionY, 90, 20)
-                .build());
+        final int actionY = top + 356;
         addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> save())
-                .dimensions(centerX + 6, actionY, 90, 20)
-                .build());
-
-        if (deleteCallback != null) {
-            addDrawableChild(ButtonWidget.builder(
-                            Text.literal("Delete PSD").formatted(Formatting.RED),
-                            button -> deletePsd()
-                    )
-                    .dimensions(centerX - 96, actionY + 24, 192, 20)
-                    .build());
-        }
-
+                .dimensions(width / 2 - 96, actionY, 90, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> close())
+                .dimensions(width / 2 + 6, actionY, 90, 20).build());
         setInitialFocus(xField);
     }
 
-    private void setDoorValue(double value) {
-        if (doorValueCallback != null) {
-            doorValueCallback.accept(value);
-        }
+    private TextFieldWidget field(String label, int labelX, int x, int y, int width, String value) {
+        final TextFieldWidget widget = new TextFieldWidget(textRenderer, x, y, width, 18, Text.empty());
+        widget.setMaxLength(64);
+        widget.setText(value);
+        fields.add(new LabeledField(label, labelX, y + 5, widget));
+        return addDrawableChild(widget);
     }
 
-    private TextFieldWidget addNumericField(int x, int y, int width, double value) {
-        return addTextField(x, y, width, String.format(Locale.ROOT, "%.3f", value));
+    private static String number(double value) {
+        return String.format(Locale.ROOT, "%.3f", value);
     }
 
-    private TextFieldWidget addTextField(int x, int y, int width, String value) {
-        final TextFieldWidget field = new TextFieldWidget(
-                textRenderer,
-                x,
-                y,
-                width,
-                20,
-                Text.empty()
-        );
-        field.setMaxLength(64);
-        field.setText(value);
-        addDrawableChild(field);
-        return field;
-    }
-
-    private void cyclePack() {
-        selectedPackId = PSDPackRegistry.next(selectedPackId);
-        packButton.setMessage(packButtonText());
-    }
-
-    private Text packButtonText() {
-        return Text.literal(PSDPackRegistry.displayName(selectedPackId));
-    }
-
-    private Text arrowButtonText() {
-        return Text.literal(arrowRight ? "Right →" : "← Left");
+    private Text directionText() {
+        return Text.literal(arrowRight ? "Right" : "Left");
     }
 
     private void save() {
         try {
-            final PrecisionTransform updatedTransform = new PrecisionTransform(
-                    Double.parseDouble(xField.getText()),
-                    Double.parseDouble(yField.getText()),
-                    Double.parseDouble(zField.getText()),
-                    initialTransform.pitch(),
-                    Float.parseFloat(yawField.getText()),
-                    initialTransform.roll(),
-                    initialTransform.scaleX(),
-                    initialTransform.scaleY(),
-                    initialTransform.scaleZ()
-            );
-            final PSDDisplayProperties updatedDisplayProperties = new PSDDisplayProperties(
-                    currentKoreanField.getText(),
-                    currentEnglishField.getText(),
-                    currentCodeField.getText(),
-                    previousKoreanField.getText(),
-                    previousEnglishField.getText(),
-                    nextKoreanField.getText(),
-                    nextEnglishField.getText(),
-                    lineField.getText(),
-                    platformField.getText(),
-                    arrowRight
-            );
-            saveCallback.save(selectedPackId, updatedTransform, updatedDisplayProperties);
+            final String color = lineColorField.getText().strip();
+            if (!color.matches("#?[0-9a-fA-F]{6}")) {
+                errorMessage = "Line Color must be a 6-digit hex code, such as #996CAC";
+                return;
+            }
+            final PrecisionTransform transform = new PrecisionTransform(
+                    Double.parseDouble(xField.getText()), Double.parseDouble(yField.getText()),
+                    Double.parseDouble(zField.getText()), initialTransform.pitch(),
+                    Float.parseFloat(rotationField.getText()), initialTransform.roll(),
+                    initialTransform.scaleX(), initialTransform.scaleY(), initialTransform.scaleZ());
+            final PSDDisplayProperties properties = new PSDDisplayProperties(
+                    color, platformField.getText(), arrowRight,
+                    currentKo.getText(), currentEn.getText(), currentCh.getText(), currentJp.getText(),
+                    nextKo.getText(), nextEn.getText(), nextCh.getText(), nextJp.getText(),
+                    previousKo.getText(), previousEn.getText(), previousCh.getText(), previousJp.getText());
+            saveCallback.save(packId, transform, properties);
             close();
         } catch (IllegalArgumentException exception) {
             errorMessage = "Enter valid finite position and rotation numbers";
         }
     }
 
-    private void deletePsd() {
-        if (deleteCallback == null) {
-            return;
-        }
-        deleteCallback.run();
-        close();
-    }
-
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
-        final int centerX = width / 2;
-        final int top = Math.max(8, height / 2 - 166);
-        final int leftX = centerX - 216;
-        final int rightX = centerX + 18;
-        final int panelBottom = deleteCallback == null
-                ? top + (doorValueCallback == null ? 326 : 350)
-                : top + (doorValueCallback == null ? 350 : 374);
-
-        context.fill(centerX - 244, top - 10, centerX + 244, panelBottom, 0xE0101010);
-        context.drawCenteredTextWithShadow(textRenderer, title, centerX, top, 0xFFFFFF);
-        context.drawCenteredTextWithShadow(textRenderer, "PSD Pack", centerX, top + 17, 0xD0D0D0);
-
-        drawLabel(context, "X", leftX, top + 76);
-        drawLabel(context, "Y", leftX, top + 102);
-        drawLabel(context, "Z", leftX, top + 128);
-        drawLabel(context, "Yaw", leftX, top + 154);
-        drawLabel(context, "Line", leftX, top + 206);
-        drawLabel(context, "Platform", leftX, top + 232);
-        drawLabel(context, "Arrow", leftX, top + 258);
-
-        drawLabel(context, "Current KR", rightX, top + 76);
-        drawLabel(context, "Current EN", rightX, top + 102);
-        drawLabel(context, "Code", rightX, top + 128);
-        drawLabel(context, "Previous KR", rightX, top + 154);
-        drawLabel(context, "Previous EN", rightX, top + 180);
-        drawLabel(context, "Next KR", rightX, top + 206);
-        drawLabel(context, "Next EN", rightX, top + 232);
-
-        if (!errorMessage.isEmpty()) {
-            context.drawCenteredTextWithShadow(
-                    textRenderer,
-                    Text.literal(errorMessage),
-                    centerX,
-                    top + 280,
-                    0xFF5555
-            );
+        final int panelWidth = Math.min(720, width - 20);
+        final int left = (width - panelWidth) / 2;
+        final int top = Math.max(8, (height - 390) / 2);
+        context.fill(left, top, left + panelWidth, top + 386, 0xEE101010);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, top + 10, 0xFFFFFF);
+        context.drawTextWithShadow(textRenderer, "Positioning", left + 18, top + 30, 0xFFFFFF);
+        context.drawTextWithShadow(textRenderer, "Header", left + panelWidth / 2 + 16, top + 30, 0xFFFFFF);
+        for (LabeledField field : fields) {
+            context.drawTextWithShadow(textRenderer, field.label(), field.labelX(), field.labelY(), 0xD0D0D0);
         }
-
+        context.drawTextWithShadow(textRenderer, "Direction", left + panelWidth / 2 + 16,
+                top + 48 + ROW * 2 + 5, 0xD0D0D0);
+        if (!errorMessage.isEmpty()) {
+            context.drawCenteredTextWithShadow(textRenderer, errorMessage, width / 2, top + 342, 0xFF5555);
+        }
         super.render(context, mouseX, mouseY, delta);
     }
 
-    private void drawLabel(DrawContext context, String label, int x, int y) {
-        context.drawTextWithShadow(textRenderer, label, x, y, 0xD0D0D0);
-    }
+    @Override public boolean shouldPause() { return false; }
 
-    @Override
-    public boolean shouldPause() {
-        return false;
-    }
+    private record LabeledField(String label, int labelX, int labelY, TextFieldWidget widget) {}
 
     @FunctionalInterface
     public interface SaveCallback {
-        void save(
-                Identifier packId,
-                PrecisionTransform transform,
-                PSDDisplayProperties displayProperties
-        );
+        void save(Identifier packId, PrecisionTransform transform, PSDDisplayProperties properties);
     }
 }

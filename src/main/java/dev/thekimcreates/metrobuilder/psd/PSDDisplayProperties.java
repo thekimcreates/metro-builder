@@ -4,84 +4,99 @@ import net.minecraft.nbt.NbtCompound;
 
 import java.util.Objects;
 
-/**
- * Editable passenger-information and label data carried by one PSD assembly.
- *
- * <p>The data is intentionally independent of the active pack. Packs that do
- * not use a field simply ignore it, while a later pack can reuse the same
- * saved values without a world migration.</p>
- */
+/** Editable Seoul Metro header information carried by one PSD assembly. */
 public record PSDDisplayProperties(
+        String lineColor,
+        String platformNumber,
+        boolean arrowRight,
         String currentStationKorean,
         String currentStationEnglish,
-        String currentStationCode,
-        String previousStationKorean,
-        String previousStationEnglish,
+        String currentStationChinese,
+        String currentStationJapanese,
         String nextStationKorean,
         String nextStationEnglish,
-        String lineNumber,
-        String platformNumber,
-        boolean arrowRight
+        String nextStationChinese,
+        String nextStationJapanese,
+        String previousStationKorean,
+        String previousStationEnglish,
+        String previousStationChinese,
+        String previousStationJapanese
 ) {
     private static final int MAX_TEXT_LENGTH = 64;
 
     public PSDDisplayProperties {
+        lineColor = normalizeColor(lineColor);
+        platformNumber = clean(platformNumber);
         currentStationKorean = clean(currentStationKorean);
         currentStationEnglish = clean(currentStationEnglish);
-        currentStationCode = clean(currentStationCode);
-        previousStationKorean = clean(previousStationKorean);
-        previousStationEnglish = clean(previousStationEnglish);
+        currentStationChinese = clean(currentStationChinese);
+        currentStationJapanese = clean(currentStationJapanese);
         nextStationKorean = clean(nextStationKorean);
         nextStationEnglish = clean(nextStationEnglish);
-        lineNumber = clean(lineNumber);
-        platformNumber = clean(platformNumber);
+        nextStationChinese = clean(nextStationChinese);
+        nextStationJapanese = clean(nextStationJapanese);
+        previousStationKorean = clean(previousStationKorean);
+        previousStationEnglish = clean(previousStationEnglish);
+        previousStationChinese = clean(previousStationChinese);
+        previousStationJapanese = clean(previousStationJapanese);
     }
 
     public static PSDDisplayProperties defaults() {
         return new PSDDisplayProperties(
-                "김포공항",
-                "Gimpo Int'l Airport",
-                "512",
-                "송정",
-                "Songjeong",
-                "개화산",
-                "Gaehwasan",
-                "5",
-                "1-1",
-                true
+                "#996CAC", "512", true,
+                "김포공항", "Gimpo Int'l Airport", "金浦机场", "キンポコンハン",
+                "개화산", "Gaehwasan", "开花山", "ケファサン",
+                "송정", "Songjeong", "松亭", "ソンジョン"
         );
+    }
+
+    public int lineColorRgb() {
+        return Integer.parseInt(lineColor.substring(1), 16);
     }
 
     public NbtCompound toNbt() {
         final NbtCompound nbt = new NbtCompound();
-        nbt.putString("CurrentStationKorean", currentStationKorean);
-        nbt.putString("CurrentStationEnglish", currentStationEnglish);
-        nbt.putString("CurrentStationCode", currentStationCode);
-        nbt.putString("PreviousStationKorean", previousStationKorean);
-        nbt.putString("PreviousStationEnglish", previousStationEnglish);
-        nbt.putString("NextStationKorean", nextStationKorean);
-        nbt.putString("NextStationEnglish", nextStationEnglish);
-        nbt.putString("LineNumber", lineNumber);
+        nbt.putString("LineColor", lineColor);
         nbt.putString("PlatformNumber", platformNumber);
         nbt.putBoolean("ArrowRight", arrowRight);
+        putStation(nbt, "Current", currentStationKorean, currentStationEnglish,
+                currentStationChinese, currentStationJapanese);
+        putStation(nbt, "Next", nextStationKorean, nextStationEnglish,
+                nextStationChinese, nextStationJapanese);
+        putStation(nbt, "Previous", previousStationKorean, previousStationEnglish,
+                previousStationChinese, previousStationJapanese);
         return nbt;
     }
 
     public static PSDDisplayProperties fromNbt(NbtCompound nbt) {
         Objects.requireNonNull(nbt, "nbt");
-        final PSDDisplayProperties defaults = defaults();
+        final PSDDisplayProperties d = defaults();
         return new PSDDisplayProperties(
-                get(nbt, "CurrentStationKorean", defaults.currentStationKorean),
-                get(nbt, "CurrentStationEnglish", defaults.currentStationEnglish),
-                get(nbt, "CurrentStationCode", defaults.currentStationCode),
-                get(nbt, "PreviousStationKorean", defaults.previousStationKorean),
-                get(nbt, "PreviousStationEnglish", defaults.previousStationEnglish),
-                get(nbt, "NextStationKorean", defaults.nextStationKorean),
-                get(nbt, "NextStationEnglish", defaults.nextStationEnglish),
-                get(nbt, "LineNumber", defaults.lineNumber),
-                get(nbt, "PlatformNumber", defaults.platformNumber),
-                !nbt.contains("ArrowRight") || nbt.getBoolean("ArrowRight")
+                get(nbt, "LineColor", d.lineColor),
+                get(nbt, "PlatformNumber",
+                        get(nbt, "CurrentStationCode", d.platformNumber)),
+                !nbt.contains("ArrowRight") || nbt.getBoolean("ArrowRight"),
+                get(nbt, "CurrentStationKorean", d.currentStationKorean),
+                get(nbt, "CurrentStationEnglish", d.currentStationEnglish),
+                get(nbt, "CurrentStationChinese", d.currentStationChinese),
+                get(nbt, "CurrentStationJapanese", d.currentStationJapanese),
+                get(nbt, "NextStationKorean", d.nextStationKorean),
+                get(nbt, "NextStationEnglish", d.nextStationEnglish),
+                get(nbt, "NextStationChinese", d.nextStationChinese),
+                get(nbt, "NextStationJapanese", d.nextStationJapanese),
+                get(nbt, "PreviousStationKorean", d.previousStationKorean),
+                get(nbt, "PreviousStationEnglish", d.previousStationEnglish),
+                get(nbt, "PreviousStationChinese", d.previousStationChinese),
+                get(nbt, "PreviousStationJapanese", d.previousStationJapanese)
         );
+    }
+
+    private static void putStation(NbtCompound nbt, String prefix,
+                                   String ko, String en, String ch, String jp) {
+        nbt.putString(prefix + "StationKorean", ko);
+        nbt.putString(prefix + "StationEnglish", en);
+        nbt.putString(prefix + "StationChinese", ch);
+        nbt.putString(prefix + "StationJapanese", jp);
     }
 
     private static String get(NbtCompound nbt, String key, String fallback) {
@@ -90,8 +105,13 @@ public record PSDDisplayProperties(
 
     private static String clean(String value) {
         final String result = Objects.requireNonNullElse(value, "").strip();
-        return result.length() <= MAX_TEXT_LENGTH
-                ? result
-                : result.substring(0, MAX_TEXT_LENGTH);
+        return result.length() <= MAX_TEXT_LENGTH ? result : result.substring(0, MAX_TEXT_LENGTH);
+    }
+
+    private static String normalizeColor(String value) {
+        String result = clean(value).toUpperCase();
+        if (!result.startsWith("#")) result = "#" + result;
+        if (!result.matches("#[0-9A-F]{6}")) return "#996CAC";
+        return result;
     }
 }

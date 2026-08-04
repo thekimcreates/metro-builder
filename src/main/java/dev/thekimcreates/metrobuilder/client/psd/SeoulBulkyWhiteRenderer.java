@@ -3,6 +3,7 @@ package dev.thekimcreates.metrobuilder.client.psd;
 import dev.thekimcreates.metrobuilder.MetroBuilder;
 import dev.thekimcreates.metrobuilder.client.model.obj.ObjMesh;
 import dev.thekimcreates.metrobuilder.client.model.obj.ObjMeshCache;
+import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.OverlayTexture;
@@ -59,6 +60,7 @@ final class SeoulBulkyWhiteRenderer {
             temperedTexture("header"), temperedTexture("caution"),
             temperedTexture("indicator_on"), temperedTexture("indicator_off"));
     private static final float DOOR_OVERLAY_Z = 0.002F;
+    private static final Identifier HEADER_BADGE = temperedTexture("badge");
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
 
     private SeoulBulkyWhiteRenderer() {
@@ -87,7 +89,7 @@ final class SeoulBulkyWhiteRenderer {
         final float doorOffset = (float) clampDoorValue(effectiveDoorValue);
 
         renderMesh(matrices, consumers, HEADER_MODEL, textures.whiteMetal(), light, false);
-        renderHeaderSign(matrices, consumers, textures, light);
+        renderHeaderSign(client, matrices, consumers, psd.displayProperties(), textures, light);
 
         // Rear sliding rail: opening leaves travel into the clear side pockets.
         matrices.push();
@@ -170,11 +172,14 @@ final class SeoulBulkyWhiteRenderer {
     }
 
     private static void renderHeaderSign(
+            MinecraftClient client,
             MatrixStack matrices,
             VertexConsumerProvider consumers,
+            PSDDisplayProperties properties,
             TextureSet textures,
             int light
     ) {
+        // Blank editable fascia. All passenger information below is rendered live.
         renderFrontQuad(
                 matrices,
                 consumers,
@@ -187,6 +192,45 @@ final class SeoulBulkyWhiteRenderer {
                 light,
                 false
         );
+        final int lineColor = properties.lineColorRgb();
+        renderTintedQuad(matrices, consumers, textures.whiteMetal(), -2.5F, 2.93F,
+                2.5F, 2.99F, 0.184F, lineColor, light);
+
+        // Compact Seoul-style arrangement matching the supplied header reference.
+        renderStation(client, matrices, consumers,
+                properties.arrowRight() ? properties.previousStationKorean() : properties.nextStationKorean(),
+                properties.arrowRight() ? properties.previousStationEnglish() : properties.nextStationEnglish(),
+                properties.arrowRight() ? properties.previousStationChinese() : properties.nextStationChinese(),
+                properties.arrowRight() ? properties.previousStationJapanese() : properties.nextStationJapanese(),
+                -1.55F, light);
+        renderTintedQuad(matrices, consumers, HEADER_BADGE, -0.90F, 2.43F,
+                -0.62F, 2.71F, 0.185F, lineColor, light);
+        renderCenteredText(client, matrices, consumers, properties.platformNumber(),
+                -0.76F, 2.525F, 0.188F, 0.0065F, 0xFFFFFFFF, light);
+        renderStation(client, matrices, consumers, properties.currentStationKorean(),
+                properties.currentStationEnglish(), properties.currentStationChinese(),
+                properties.currentStationJapanese(), -0.10F, light);
+        renderCenteredText(client, matrices, consumers, properties.arrowRight() ? "→" : "←",
+                0.78F, 2.51F, 0.188F, 0.014F, 0xFF111111, light);
+        renderStation(client, matrices, consumers,
+                properties.arrowRight() ? properties.nextStationKorean() : properties.previousStationKorean(),
+                properties.arrowRight() ? properties.nextStationEnglish() : properties.previousStationEnglish(),
+                properties.arrowRight() ? properties.nextStationChinese() : properties.previousStationChinese(),
+                properties.arrowRight() ? properties.nextStationJapanese() : properties.previousStationJapanese(),
+                1.55F, light);
+    }
+
+    private static void renderStation(MinecraftClient client, MatrixStack matrices,
+                                      VertexConsumerProvider consumers, String ko, String en,
+                                      String ch, String jp, float x, int light) {
+        renderCenteredText(client, matrices, consumers, ko, x, 2.60F, 0.188F,
+                0.010F, 0xFF111111, light);
+        renderCenteredText(client, matrices, consumers, en, x, 2.48F, 0.188F,
+                0.0045F, 0xFF222222, light);
+        renderCenteredText(client, matrices, consumers, ch, x, 2.40F, 0.188F,
+                0.0035F, 0xFF333333, light);
+        renderCenteredText(client, matrices, consumers, jp, x, 2.34F, 0.188F,
+                0.0035F, 0xFF333333, light);
     }
 
     private static void renderCaution(
@@ -327,6 +371,30 @@ final class SeoulBulkyWhiteRenderer {
                 .light(light)
                 .normal(normal, 0.0F, 0.0F, 1.0F)
                 .next();
+    }
+
+    private static void renderTintedQuad(MatrixStack matrices, VertexConsumerProvider consumers,
+                                         Identifier texture, float minX, float minY,
+                                         float maxX, float maxY, float z, int rgb, int light) {
+        final VertexConsumer vertices = consumers.getBuffer(RenderLayer.getEntityTranslucent(texture));
+        final MatrixStack.Entry entry = matrices.peek();
+        final Matrix4f position = entry.getPositionMatrix();
+        final Matrix3f normal = entry.getNormalMatrix();
+        final int red = rgb >> 16 & 255;
+        final int green = rgb >> 8 & 255;
+        final int blue = rgb & 255;
+        tintedVertex(vertices, position, normal, minX, minY, z, 0, 1, red, green, blue, light);
+        tintedVertex(vertices, position, normal, maxX, minY, z, 1, 1, red, green, blue, light);
+        tintedVertex(vertices, position, normal, maxX, maxY, z, 1, 0, red, green, blue, light);
+        tintedVertex(vertices, position, normal, minX, maxY, z, 0, 0, red, green, blue, light);
+    }
+
+    private static void tintedVertex(VertexConsumer consumer, Matrix4f position, Matrix3f normal,
+                                     float x, float y, float z, float u, float v,
+                                     int red, int green, int blue, int light) {
+        consumer.vertex(position, x, y, z).color(red, green, blue, 255).texture(u, v)
+                .overlay(OverlayTexture.DEFAULT_UV).light(light)
+                .normal(normal, 0.0F, 0.0F, 1.0F).next();
     }
 
     private static void renderCenteredText(
