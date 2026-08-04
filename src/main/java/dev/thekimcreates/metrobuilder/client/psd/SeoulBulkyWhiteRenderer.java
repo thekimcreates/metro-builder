@@ -10,6 +10,8 @@ import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
@@ -22,6 +24,7 @@ import org.joml.Matrix4f;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.io.ByteArrayInputStream;
 
 /** Renders the five-block Seoul Metro Bulky White PSD from authored OBJ meshes. */
 final class SeoulBulkyWhiteRenderer {
@@ -66,6 +69,7 @@ final class SeoulBulkyWhiteRenderer {
     private static final Identifier NOTO_SANS_KR = MetroBuilder.id("noto_sans_kr");
     private static final Identifier ROBOTO_REGULAR = MetroBuilder.id("roboto_regular");
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
+    private static final Map<Integer, Identifier> UPLOADED_HEADERS = new HashMap<>();
 
     private SeoulBulkyWhiteRenderer() {
     }
@@ -122,16 +126,6 @@ final class SeoulBulkyWhiteRenderer {
                 light
         );
         renderCaution(matrices, consumers, textures, 0.5F, light);
-        if (!psd.displayProperties().platformNumber().isBlank()) {
-            renderDoorNumberLabel(
-                    client,
-                    matrices,
-                    consumers,
-                    psd.displayProperties().platformNumber(),
-                    0.5F,
-                    light
-            );
-        }
         matrices.pop();
 
         // Fixed panels are a physically separate front layer.
@@ -183,11 +177,11 @@ final class SeoulBulkyWhiteRenderer {
             TextureSet textures,
             int light
     ) {
-        // Blank editable fascia. All passenger information below is rendered live.
+        final Identifier headerTexture = uploadedHeader(client, properties, textures.header());
         renderFrontQuad(
                 matrices,
                 consumers,
-                textures.header(),
+                headerTexture,
                 -2.5F,
                 2.1F,
                 2.5F,
@@ -196,61 +190,30 @@ final class SeoulBulkyWhiteRenderer {
                 light,
                 false
         );
-        final int lineColor = properties.lineColorRgb();
-        renderTintedQuad(matrices, consumers, textures.whiteMetal(), -2.5F, 2.93F,
-                2.5F, 2.99F, 0.184F, lineColor, light);
+    }
 
-        // Pixel-for-block transcription of the supplied 1280x256 header.png.
-        // Its information group occupies x=376..871 and y=177..209.
-        final boolean right = properties.arrowRight();
-        final String sideLeftKo = right ? properties.previousStationKorean() : properties.nextStationKorean();
-        final String sideLeftEn = right ? properties.previousStationEnglish() : properties.nextStationEnglish();
-        final String sideLeftCh = right ? properties.previousStationChinese() : properties.nextStationChinese();
-        final String sideLeftJp = right ? properties.previousStationJapanese() : properties.nextStationJapanese();
-        final String sideRightKo = right ? properties.nextStationKorean() : properties.previousStationKorean();
-        final String sideRightEn = right ? properties.nextStationEnglish() : properties.previousStationEnglish();
-        final String sideRightCh = right ? properties.nextStationChinese() : properties.previousStationChinese();
-        final String sideRightJp = right ? properties.nextStationJapanese() : properties.previousStationJapanese();
-
-        // Previous station: small badge, Korean, English on the same line, translations below.
-        renderTintedQuad(matrices, consumers, HEADER_BADGE, -1.03F, 2.282F,
-                -0.94F, 2.372F, 0.185F, lineColor, light);
-        renderFontText(client, matrices, consumers, "513", -0.985F, 2.313F, 0.188F,
-                0.0025F, 0xFFFFFFFF, ROBOTO_REGULAR, true, light);
-        renderFontText(client, matrices, consumers, sideLeftKo, -0.91F, 2.338F, 0.188F,
-                0.0042F, 0xFF777777, NOTO_SANS_KR, false, light);
-        renderFontText(client, matrices, consumers, sideLeftEn, -0.70F, 2.337F, 0.188F,
-                0.0018F, 0xFF777777, ROBOTO_REGULAR, false, light);
-        renderFontText(client, matrices, consumers, sideLeftCh + "  " + sideLeftJp,
-                -0.70F, 2.306F, 0.188F, 0.00145F, 0xFF888888, ROBOTO_REGULAR, false, light);
-
-        // Current station: dominant badge and Korean name, with compact multilingual copy.
-        renderTintedQuad(matrices, consumers, HEADER_BADGE, -0.53F, 2.268F,
-                -0.39F, 2.408F, 0.185F, lineColor, light);
-        renderFontText(client, matrices, consumers, properties.platformNumber(), -0.46F, 2.316F,
-                0.188F, 0.0043F, 0xFFFFFFFF, ROBOTO_REGULAR, true, light);
-        renderFontText(client, matrices, consumers, properties.currentStationKorean(),
-                -0.36F, 2.350F, 0.188F, 0.0090F, 0xFF111111, NOTO_SANS_KR, false, light);
-        renderFontText(client, matrices, consumers, properties.currentStationEnglish(),
-                -0.01F, 2.350F, 0.188F, 0.0027F, 0xFF111111, ROBOTO_REGULAR, false, light);
-        renderFontText(client, matrices, consumers,
-                properties.currentStationChinese() + "  " + properties.currentStationJapanese(),
-                -0.01F, 2.304F, 0.188F, 0.00175F, 0xFF111111, ROBOTO_REGULAR, false, light);
-
-        renderFontText(client, matrices, consumers, right ? "→" : "←", 0.36F, 2.315F,
-                0.188F, 0.012F, 0xFF111111, ROBOTO_REGULAR, true, light);
-
-        // Next station mirrors the small treatment at the right of the arrow.
-        renderTintedQuad(matrices, consumers, HEADER_BADGE, 0.45F, 2.282F,
-                0.54F, 2.372F, 0.185F, lineColor, light);
-        renderFontText(client, matrices, consumers, "511", 0.495F, 2.313F, 0.188F,
-                0.0025F, 0xFFFFFFFF, ROBOTO_REGULAR, true, light);
-        renderFontText(client, matrices, consumers, sideRightKo, 0.56F, 2.338F, 0.188F,
-                0.0042F, 0xFF111111, NOTO_SANS_KR, false, light);
-        renderFontText(client, matrices, consumers, sideRightEn, 0.75F, 2.337F, 0.188F,
-                0.0018F, 0xFF111111, ROBOTO_REGULAR, false, light);
-        renderFontText(client, matrices, consumers, sideRightCh + "  " + sideRightJp,
-                0.75F, 2.306F, 0.188F, 0.00145F, 0xFF111111, ROBOTO_REGULAR, false, light);
+    private static Identifier uploadedHeader(MinecraftClient client, PSDDisplayProperties properties,
+                                             Identifier fallback) {
+        if (!properties.hasHeaderPng()) return fallback;
+        final byte[] png = properties.headerPng();
+        final int key = java.util.Arrays.hashCode(png);
+        final Identifier cached = UPLOADED_HEADERS.get(key);
+        if (cached != null) return cached;
+        try {
+            final NativeImage image = NativeImage.read(new ByteArrayInputStream(png));
+            if (image.getWidth() != 1280 || image.getHeight() != 256) {
+                image.close();
+                return fallback;
+            }
+            final Identifier identifier = client.getTextureManager().registerDynamicTexture(
+                    "metrobuilder_uploaded_header_" + Integer.toUnsignedString(key),
+                    new NativeImageBackedTexture(image));
+            UPLOADED_HEADERS.put(key, identifier);
+            return identifier;
+        } catch (Exception exception) {
+            MetroBuilder.LOGGER.warn("Could not decode uploaded PSD header", exception);
+            return fallback;
+        }
     }
 
     private static void renderCaution(

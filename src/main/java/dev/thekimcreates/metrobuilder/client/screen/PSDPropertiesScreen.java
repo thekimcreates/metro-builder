@@ -6,31 +6,28 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.texture.NativeImage;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
-import java.util.ArrayList;
+import java.io.ByteArrayInputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.function.DoubleConsumer;
 
-/** Two-column editor for positioning and the live-rendered Seoul header. */
+/** Position editor with a drag-and-drop 1280x256 PNG header uploader. */
 public final class PSDPropertiesScreen extends Screen {
-    private static final int ROW = 21;
     private final Identifier packId;
     private final PrecisionTransform initialTransform;
-    private final PSDDisplayProperties initial;
     private final SaveCallback saveCallback;
-    private final List<LabeledField> fields = new ArrayList<>();
     private TextFieldWidget xField, yField, zField, rotationField;
-    private TextFieldWidget lineColorField, platformField;
-    private TextFieldWidget currentKo, currentEn, currentCh, currentJp;
-    private TextFieldWidget nextKo, nextEn, nextCh, nextJp;
-    private TextFieldWidget previousKo, previousEn, previousCh, previousJp;
-    private ButtonWidget directionButton;
-    private boolean arrowRight;
-    private String errorMessage = "";
+    private byte[] uploadedPng;
+    private String uploadedName;
+    private String message = "";
+    private int dropX, dropY, dropWidth, dropHeight;
 
     public PSDPropertiesScreen(String title, Identifier packId, PrecisionTransform transform,
                                PSDDisplayProperties properties, SaveCallback saveCallback) {
@@ -49,52 +46,31 @@ public final class PSDPropertiesScreen extends Screen {
         super(Text.literal(title));
         this.packId = Objects.requireNonNull(packId);
         this.initialTransform = Objects.requireNonNull(transform);
-        this.initial = Objects.requireNonNull(properties);
         this.saveCallback = Objects.requireNonNull(saveCallback);
-        this.arrowRight = properties.arrowRight();
+        this.uploadedPng = Objects.requireNonNull(properties).headerPng();
+        this.uploadedName = properties.hasHeaderPng() ? "Uploaded header.png" : "No header uploaded";
     }
 
     @Override
     protected void init() {
-        fields.clear();
-        final int panelWidth = Math.min(720, width - 20);
-        final int left = (width - panelWidth) / 2;
-        final int top = Math.max(8, (height - 390) / 2);
-        final int leftFieldX = left + 105;
-        final int rightLabelX = left + panelWidth / 2 + 16;
-        final int rightFieldX = rightLabelX + 116;
-        final int rightFieldWidth = left + panelWidth - 16 - rightFieldX;
+        final int panelWidth = Math.min(650, width - 20);
+        final int panelLeft = (width - panelWidth) / 2;
+        final int top = Math.max(12, (height - 285) / 2);
+        final int leftX = panelLeft + 20;
+        final int fieldX = leftX + 78;
+        final int rightX = panelLeft + panelWidth / 2 + 15;
+        final int fieldWidth = panelWidth / 2 - 115;
 
-        xField = field("X", left + 18, leftFieldX, top + 48, 190, number(initialTransform.x()));
-        yField = field("Y", left + 18, leftFieldX, top + 48 + ROW, 190, number(initialTransform.y()));
-        zField = field("Z", left + 18, leftFieldX, top + 48 + ROW * 2, 190, number(initialTransform.z()));
-        rotationField = field("Rotation", left + 18, leftFieldX, top + 48 + ROW * 3, 190,
-                number(initialTransform.yaw()));
+        xField = field(fieldX, top + 58, fieldWidth, initialTransform.x());
+        yField = field(fieldX, top + 84, fieldWidth, initialTransform.y());
+        zField = field(fieldX, top + 110, fieldWidth, initialTransform.z());
+        rotationField = field(fieldX, top + 136, fieldWidth, initialTransform.yaw());
 
-        int y = top + 48;
-        lineColorField = field("Line Color", rightLabelX, rightFieldX, y, rightFieldWidth, initial.lineColor());
-        platformField = field("Platform Number", rightLabelX, rightFieldX, y += ROW,
-                rightFieldWidth, initial.platformNumber());
-        directionButton = addDrawableChild(ButtonWidget.builder(directionText(), button -> {
-            arrowRight = !arrowRight;
-            directionButton.setMessage(directionText());
-        }).dimensions(rightFieldX, y += ROW, rightFieldWidth, 18).build());
-
-        y += ROW + 5;
-        currentKo = field("Current (ko)", rightLabelX, rightFieldX, y, rightFieldWidth, initial.currentStationKorean());
-        currentEn = field("Current (en)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.currentStationEnglish());
-        currentCh = field("Current (ch)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.currentStationChinese());
-        currentJp = field("Current (jp)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.currentStationJapanese());
-        nextKo = field("Next (ko)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationKorean());
-        nextEn = field("Next (en)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationEnglish());
-        nextCh = field("Next (ch)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationChinese());
-        nextJp = field("Next (jp)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.nextStationJapanese());
-        previousKo = field("Previous (ko)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationKorean());
-        previousEn = field("Previous (en)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationEnglish());
-        previousCh = field("Previous (ch)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationChinese());
-        previousJp = field("Previous (jp)", rightLabelX, rightFieldX, y += ROW, rightFieldWidth, initial.previousStationJapanese());
-
-        final int actionY = top + 356;
+        dropX = rightX;
+        dropY = top + 58;
+        dropWidth = panelLeft + panelWidth - 20 - rightX;
+        dropHeight = 112;
+        final int actionY = top + 245;
         addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> save())
                 .dimensions(width / 2 - 96, actionY, 90, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> close())
@@ -102,70 +78,97 @@ public final class PSDPropertiesScreen extends Screen {
         setInitialFocus(xField);
     }
 
-    private TextFieldWidget field(String label, int labelX, int x, int y, int width, String value) {
-        final TextFieldWidget widget = new TextFieldWidget(textRenderer, x, y, width, 18, Text.empty());
-        widget.setMaxLength(64);
-        widget.setText(value);
-        fields.add(new LabeledField(label, labelX, y + 5, widget));
-        return addDrawableChild(widget);
+    private TextFieldWidget field(int x, int y, int width, double value) {
+        final TextFieldWidget field = new TextFieldWidget(textRenderer, x, y, width, 20, Text.empty());
+        field.setText(String.format(Locale.ROOT, "%.3f", value));
+        field.setMaxLength(32);
+        return addDrawableChild(field);
     }
 
-    private static String number(double value) {
-        return String.format(Locale.ROOT, "%.3f", value);
+    @Override
+    public void filesDragged(List<Path> paths) {
+        if (paths.size() != 1) {
+            message = "Drop exactly one PNG file";
+            return;
+        }
+        loadHeader(paths.get(0));
     }
 
-    private Text directionText() {
-        return Text.literal(arrowRight ? "Right" : "Left");
+    private void loadHeader(Path path) {
+        try {
+            if (!path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".png")) {
+                throw new IllegalArgumentException("File must be a PNG");
+            }
+            final byte[] bytes = Files.readAllBytes(path);
+            if (bytes.length > PSDDisplayProperties.MAX_HEADER_BYTES) {
+                throw new IllegalArgumentException("PNG must be 2 MiB or smaller");
+            }
+            try (NativeImage image = NativeImage.read(new ByteArrayInputStream(bytes))) {
+                if (image.getWidth() != 1280 || image.getHeight() != 256) {
+                    throw new IllegalArgumentException("PNG must be exactly 1280x256 pixels");
+                }
+            }
+            uploadedPng = bytes;
+            uploadedName = path.getFileName().toString();
+            message = "Header ready to save";
+        } catch (Exception exception) {
+            message = exception.getMessage() == null ? "Could not read PNG" : exception.getMessage();
+        }
     }
 
     private void save() {
         try {
-            final String color = lineColorField.getText().strip();
-            if (!color.matches("#?[0-9a-fA-F]{6}")) {
-                errorMessage = "Line Color must be a 6-digit hex code, such as #996CAC";
-                return;
-            }
             final PrecisionTransform transform = new PrecisionTransform(
                     Double.parseDouble(xField.getText()), Double.parseDouble(yField.getText()),
                     Double.parseDouble(zField.getText()), initialTransform.pitch(),
                     Float.parseFloat(rotationField.getText()), initialTransform.roll(),
                     initialTransform.scaleX(), initialTransform.scaleY(), initialTransform.scaleZ());
-            final PSDDisplayProperties properties = new PSDDisplayProperties(
-                    color, platformField.getText(), arrowRight,
-                    currentKo.getText(), currentEn.getText(), currentCh.getText(), currentJp.getText(),
-                    nextKo.getText(), nextEn.getText(), nextCh.getText(), nextJp.getText(),
-                    previousKo.getText(), previousEn.getText(), previousCh.getText(), previousJp.getText());
-            saveCallback.save(packId, transform, properties);
+            saveCallback.save(packId, transform, new PSDDisplayProperties(uploadedPng));
             close();
         } catch (IllegalArgumentException exception) {
-            errorMessage = "Enter valid finite position and rotation numbers";
+            message = "Enter valid finite positioning values";
         }
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
-        final int panelWidth = Math.min(720, width - 20);
+        final int panelWidth = Math.min(650, width - 20);
         final int left = (width - panelWidth) / 2;
-        final int top = Math.max(8, (height - 390) / 2);
-        context.fill(left, top, left + panelWidth, top + 386, 0xEE101010);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, top + 10, 0xFFFFFF);
-        context.drawTextWithShadow(textRenderer, "Positioning", left + 18, top + 30, 0xFFFFFF);
-        context.drawTextWithShadow(textRenderer, "Header", left + panelWidth / 2 + 16, top + 30, 0xFFFFFF);
-        for (LabeledField field : fields) {
-            context.drawTextWithShadow(textRenderer, field.label(), field.labelX(), field.labelY(), 0xD0D0D0);
-        }
-        context.drawTextWithShadow(textRenderer, "Direction", left + panelWidth / 2 + 16,
-                top + 48 + ROW * 2 + 5, 0xD0D0D0);
-        if (!errorMessage.isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, errorMessage, width / 2, top + 342, 0xFF5555);
+        final int top = Math.max(12, (height - 285) / 2);
+        context.fill(left, top, left + panelWidth, top + 280, 0xEE101010);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, top + 12, 0xFFFFFF);
+        context.drawTextWithShadow(textRenderer, "Positioning", left + 20, top + 36, 0xFFFFFF);
+        context.drawTextWithShadow(textRenderer, "Upload Header", left + panelWidth / 2 + 15,
+                top + 36, 0xFFFFFF);
+        drawLabel(context, "X", left + 20, top + 64);
+        drawLabel(context, "Y", left + 20, top + 90);
+        drawLabel(context, "Z", left + 20, top + 116);
+        drawLabel(context, "Rotation", left + 20, top + 142);
+
+        final boolean hover = mouseX >= dropX && mouseX <= dropX + dropWidth
+                && mouseY >= dropY && mouseY <= dropY + dropHeight;
+        context.fill(dropX, dropY, dropX + dropWidth, dropY + dropHeight,
+                hover ? 0xFF383838 : 0xFF242424);
+        context.drawBorder(dropX, dropY, dropWidth, dropHeight, hover ? 0xFFFFFFFF : 0xFF777777);
+        context.drawCenteredTextWithShadow(textRenderer, "Drop a PNG file here",
+                dropX + dropWidth / 2, dropY + 31, 0xFFFFFF);
+        context.drawCenteredTextWithShadow(textRenderer, "Required: 1280 x 256 px",
+                dropX + dropWidth / 2, dropY + 51, 0xAAAAAA);
+        context.drawCenteredTextWithShadow(textRenderer, uploadedName,
+                dropX + dropWidth / 2, dropY + 77, uploadedPng.length > 0 ? 0x55FF55 : 0xAAAAAA);
+        if (!message.isBlank()) {
+            context.drawCenteredTextWithShadow(textRenderer, message, width / 2, top + 222,
+                    message.contains("ready") ? 0x55FF55 : 0xFF5555);
         }
         super.render(context, mouseX, mouseY, delta);
     }
 
-    @Override public boolean shouldPause() { return false; }
+    private void drawLabel(DrawContext context, String label, int x, int y) {
+        context.drawTextWithShadow(textRenderer, label, x, y, 0xD0D0D0);
+    }
 
-    private record LabeledField(String label, int labelX, int labelY, TextFieldWidget widget) {}
+    @Override public boolean shouldPause() { return false; }
 
     @FunctionalInterface
     public interface SaveCallback {
