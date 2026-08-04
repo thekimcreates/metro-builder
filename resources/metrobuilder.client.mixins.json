@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "package": "dev.thekimcreates.metrobuilder.client.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "client": ["ClientEntityMoveMixin"],
+  "injectors": {"defaultRequire": 1},
+  "refmap": "metrobuilder-refmap.json"
+}
