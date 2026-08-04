@@ -1,8 +1,0 @@
-{
-  "required": true,
-  "package": "dev.thekimcreates.metrobuilder.mixin",
-  "compatibilityLevel": "JAVA_17",
-  "mixins": ["ServerEntityCollisionMixin"],
-  "injectors": {"defaultRequire": 1},
-  "refmap": "metrobuilder-refmap.json"
-}
