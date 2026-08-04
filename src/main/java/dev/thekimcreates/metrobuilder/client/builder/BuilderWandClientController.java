@@ -149,9 +149,17 @@ public final class BuilderWandClientController {
             return;
         }
 
-        final PSDTemplate template = lastPlacedTemplate == null
+        final PSDTemplate baseTemplate = lastPlacedTemplate == null
                 ? PSDTemplate.defaultFor(client.player.getYaw())
                 : lastPlacedTemplate;
+        final PSDTemplate template = isTemperedWhiteItem(client.player.getMainHandStack())
+                || isTemperedWhiteItem(client.player.getOffHandStack())
+                ? new PSDTemplate(
+                        PSDPackRegistry.SEOUL_LINES_5_7_TEMPERED_WHITE_PACK,
+                        baseTemplate.pitch, baseTemplate.yaw, baseTemplate.roll,
+                        baseTemplate.scaleX, baseTemplate.scaleY, baseTemplate.scaleZ,
+                        baseTemplate.displayProperties)
+                : baseTemplate;
         pending = new PendingPSD(
                 template.packId,
                 new PrecisionTransform(
@@ -409,7 +417,11 @@ public final class BuilderWandClientController {
     }
 
     private static boolean isWand(ItemStack stack) {
-        return stack.isOf(MetroBuilderItems.BUILDER_WAND);
+        return stack.isOf(MetroBuilderItems.BUILDER_WAND) || isTemperedWhiteItem(stack);
+    }
+
+    private static boolean isTemperedWhiteItem(ItemStack stack) {
+        return stack.isOf(MetroBuilderItems.SEOUL_LINES_5_7_TEMPERED_WHITE);
     }
 
     private static KeyBinding register(String name, int keyCode) {

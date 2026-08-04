@@ -52,6 +52,12 @@ final class SeoulBulkyWhiteRenderer {
     private static final Identifier CAUTION = texture("caution");
     private static final Identifier INDICATOR_ON = texture("indicator_on");
     private static final Identifier INDICATOR_OFF = texture("indicator_off");
+    private static final TextureSet BULKY_WHITE_TEXTURES = new TextureSet(
+            WHITE_METAL, DARK_FRAME, GLASS, HEADER_SIGN, CAUTION, INDICATOR_ON, INDICATOR_OFF);
+    private static final TextureSet TEMPERED_WHITE_TEXTURES = new TextureSet(
+            temperedTexture("white_metal"), temperedTexture("teal_frame"), temperedTexture("glass"),
+            temperedTexture("header"), temperedTexture("caution"),
+            temperedTexture("indicator_on"), temperedTexture("indicator_off"));
     private static final float DOOR_OVERLAY_Z = 0.002F;
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
 
@@ -65,6 +71,9 @@ final class SeoulBulkyWhiteRenderer {
             ClientPSDObject psd,
             int light
     ) {
+        final TextureSet textures = psd.packId().equals(
+                dev.thekimcreates.metrobuilder.psd.PSDPackRegistry.SEOUL_LINES_5_7_TEMPERED_WHITE_PACK)
+                ? TEMPERED_WHITE_TEXTURES : BULKY_WHITE_TEXTURES;
         if (SINGLE_PANEL_PACK.equals(psd.packId())) {
             renderMesh(matrices, consumers, PANEL_WHITE_MODEL, WHITE_METAL, light, false);
             renderMesh(matrices, consumers, PANEL_DARK_MODEL, DARK_FRAME, light, false);
@@ -77,8 +86,8 @@ final class SeoulBulkyWhiteRenderer {
                 .orElse(psd.doorValue());
         final float doorOffset = (float) clampDoorValue(effectiveDoorValue);
 
-        renderMesh(matrices, consumers, HEADER_MODEL, WHITE_METAL, light, false);
-        renderHeaderSign(matrices, consumers, light);
+        renderMesh(matrices, consumers, HEADER_MODEL, textures.whiteMetal(), light, false);
+        renderHeaderSign(matrices, consumers, textures, light);
 
         // Rear sliding rail: opening leaves travel into the clear side pockets.
         matrices.push();
@@ -89,9 +98,10 @@ final class SeoulBulkyWhiteRenderer {
                 LEFT_DOOR_WHITE_MODEL,
                 LEFT_DOOR_DARK_MODEL,
                 LEFT_DOOR_GLASS_MODEL,
+                textures,
                 light
         );
-        renderCaution(matrices, consumers, -0.5F, light);
+        renderCaution(matrices, consumers, textures, -0.5F, light);
         matrices.pop();
 
         matrices.push();
@@ -102,9 +112,10 @@ final class SeoulBulkyWhiteRenderer {
                 RIGHT_DOOR_WHITE_MODEL,
                 RIGHT_DOOR_DARK_MODEL,
                 RIGHT_DOOR_GLASS_MODEL,
+                textures,
                 light
         );
-        renderCaution(matrices, consumers, 0.5F, light);
+        renderCaution(matrices, consumers, textures, 0.5F, light);
         if (!psd.displayProperties().platformNumber().isBlank()) {
             renderDoorNumberLabel(
                     client,
@@ -118,9 +129,9 @@ final class SeoulBulkyWhiteRenderer {
         matrices.pop();
 
         // Fixed panels are a physically separate front layer.
-        renderSideAssembly(matrices, consumers, light);
+        renderSideAssembly(matrices, consumers, textures, light);
 
-        renderIndicator(matrices, consumers, indicatorLit(psd.id(), effectiveDoorValue), light);
+        renderIndicator(matrices, consumers, textures, indicatorLit(psd.id(), effectiveDoorValue), light);
     }
 
     /** Adds the standard clean 1.5-block glass wings to a native two-door pack. */
@@ -130,17 +141,18 @@ final class SeoulBulkyWhiteRenderer {
             int light
     ) {
         renderMesh(matrices, consumers, HEADER_WINGS_MODEL, WHITE_METAL, light, false);
-        renderSideAssembly(matrices, consumers, light);
+        renderSideAssembly(matrices, consumers, BULKY_WHITE_TEXTURES, light);
     }
 
     private static void renderSideAssembly(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
+            TextureSet textures,
             int light
     ) {
-        renderMesh(matrices, consumers, SIDE_WHITE_MODEL, WHITE_METAL, light, false);
-        renderMesh(matrices, consumers, SIDE_DARK_MODEL, DARK_FRAME, light, false);
-        renderMesh(matrices, consumers, SIDE_GLASS_MODEL, GLASS, light, true);
+        renderMesh(matrices, consumers, SIDE_WHITE_MODEL, textures.whiteMetal(), light, false);
+        renderMesh(matrices, consumers, SIDE_DARK_MODEL, textures.frame(), light, false);
+        renderMesh(matrices, consumers, SIDE_GLASS_MODEL, textures.glass(), light, true);
     }
 
     private static void renderDoorMeshes(
@@ -149,22 +161,24 @@ final class SeoulBulkyWhiteRenderer {
             Identifier whiteModel,
             Identifier darkModel,
             Identifier glassModel,
+            TextureSet textures,
             int light
     ) {
-        renderMesh(matrices, consumers, whiteModel, WHITE_METAL, light, false);
-        renderMesh(matrices, consumers, darkModel, DARK_FRAME, light, false);
-        renderMesh(matrices, consumers, glassModel, GLASS, light, true);
+        renderMesh(matrices, consumers, whiteModel, textures.whiteMetal(), light, false);
+        renderMesh(matrices, consumers, darkModel, textures.frame(), light, false);
+        renderMesh(matrices, consumers, glassModel, textures.glass(), light, true);
     }
 
     private static void renderHeaderSign(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
+            TextureSet textures,
             int light
     ) {
         renderFrontQuad(
                 matrices,
                 consumers,
-                HEADER_SIGN,
+                textures.header(),
                 -2.5F,
                 2.1F,
                 2.5F,
@@ -178,13 +192,14 @@ final class SeoulBulkyWhiteRenderer {
     private static void renderCaution(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
+            TextureSet textures,
             float centerX,
             int light
     ) {
         renderFrontQuad(
                 matrices,
                 consumers,
-                CAUTION,
+                textures.caution(),
                 centerX - 0.30F,
                 1.17F,
                 centerX + 0.30F,
@@ -232,13 +247,14 @@ final class SeoulBulkyWhiteRenderer {
     private static void renderIndicator(
             MatrixStack matrices,
             VertexConsumerProvider consumers,
+            TextureSet textures,
             boolean lit,
             int light
     ) {
         renderFrontQuad(
                 matrices,
                 consumers,
-                lit ? INDICATOR_ON : INDICATOR_OFF,
+                lit ? textures.indicatorOn() : textures.indicatorOff(),
                 -0.25F,
                 2.13F,
                 0.25F,
@@ -391,6 +407,22 @@ final class SeoulBulkyWhiteRenderer {
 
     private static Identifier texture(String name) {
         return MetroBuilder.id("textures/psd/seoul_bulky_white/" + name + ".png");
+    }
+
+    private static Identifier temperedTexture(String name) {
+        return MetroBuilder.id(
+                "textures/psd/seoul_lines_5_7_tempered_white/" + name + ".png");
+    }
+
+    private record TextureSet(
+            Identifier whiteMetal,
+            Identifier frame,
+            Identifier glass,
+            Identifier header,
+            Identifier caution,
+            Identifier indicatorOn,
+            Identifier indicatorOff
+    ) {
     }
 
     private static final class DoorMotionMemory {

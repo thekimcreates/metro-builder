@@ -1,6 +1,7 @@
 {
   "itemGroup.metrobuilder.main": "MetroBuilder",
   "item.metrobuilder.builder_wand": "Builder Wand",
+  "item.metrobuilder.seoul_lines_5_7_tempered_white": "Seoul Metro Lines 5, 7 Tempered White",
   "item.metrobuilder.builder_wand.tooltip": "Unified precision PSD editing tool",
   "item.metrobuilder.builder_wand.tooltip.controls": "Right-click: preview/place/edit • [ ]: rotate • Arrows: move • P: properties",
   "message.metrobuilder.creative_only": "MetroBuilder tools require Creative Mode",
