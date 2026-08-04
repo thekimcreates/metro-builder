@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "metrobuilder:item/seoul_lines_5_7_tempered_white"
+  }
+}

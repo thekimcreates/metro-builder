@@ -44,4 +44,7 @@ jar {
     from('LICENSE') {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
+    from('THIRD_PARTY_LICENSES') {
+        into 'META-INF/licenses'
+    }
 }

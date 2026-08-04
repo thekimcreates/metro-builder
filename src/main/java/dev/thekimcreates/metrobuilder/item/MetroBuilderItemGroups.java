@@ -16,7 +16,10 @@ public final class MetroBuilderItemGroups {
             FabricItemGroup.builder()
                     .displayName(Text.translatable("itemGroup.metrobuilder.main"))
                     .icon(() -> new ItemStack(MetroBuilderItems.BUILDER_WAND))
-                    .entries((displayContext, entries) -> entries.add(MetroBuilderItems.BUILDER_WAND))
+                    .entries((displayContext, entries) -> {
+                        entries.add(MetroBuilderItems.BUILDER_WAND);
+                        entries.add(MetroBuilderItems.SEOUL_LINES_5_7_TEMPERED_WHITE);
+                    })
                     .build()
     );
 
