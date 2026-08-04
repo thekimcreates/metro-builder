@@ -11,6 +11,8 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.Style;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.RotationAxis;
@@ -61,6 +63,8 @@ final class SeoulBulkyWhiteRenderer {
             temperedTexture("indicator_on"), temperedTexture("indicator_off"));
     private static final float DOOR_OVERLAY_Z = 0.002F;
     private static final Identifier HEADER_BADGE = temperedTexture("badge");
+    private static final Identifier NOTO_SANS_KR = MetroBuilder.id("noto_sans_kr");
+    private static final Identifier ROBOTO_REGULAR = MetroBuilder.id("roboto_regular");
     private static final Map<UUID, DoorMotionMemory> DOOR_MOTION = new HashMap<>();
 
     private SeoulBulkyWhiteRenderer() {
@@ -196,41 +200,57 @@ final class SeoulBulkyWhiteRenderer {
         renderTintedQuad(matrices, consumers, textures.whiteMetal(), -2.5F, 2.93F,
                 2.5F, 2.99F, 0.184F, lineColor, light);
 
-        // Compact Seoul-style arrangement matching the supplied header reference.
-        renderStation(client, matrices, consumers,
-                properties.arrowRight() ? properties.previousStationKorean() : properties.nextStationKorean(),
-                properties.arrowRight() ? properties.previousStationEnglish() : properties.nextStationEnglish(),
-                properties.arrowRight() ? properties.previousStationChinese() : properties.nextStationChinese(),
-                properties.arrowRight() ? properties.previousStationJapanese() : properties.nextStationJapanese(),
-                -1.55F, light);
-        renderTintedQuad(matrices, consumers, HEADER_BADGE, -0.90F, 2.43F,
-                -0.62F, 2.71F, 0.185F, lineColor, light);
-        renderCenteredText(client, matrices, consumers, properties.platformNumber(),
-                -0.76F, 2.525F, 0.188F, 0.0065F, 0xFFFFFFFF, light);
-        renderStation(client, matrices, consumers, properties.currentStationKorean(),
-                properties.currentStationEnglish(), properties.currentStationChinese(),
-                properties.currentStationJapanese(), -0.10F, light);
-        renderCenteredText(client, matrices, consumers, properties.arrowRight() ? "→" : "←",
-                0.78F, 2.51F, 0.188F, 0.014F, 0xFF111111, light);
-        renderStation(client, matrices, consumers,
-                properties.arrowRight() ? properties.nextStationKorean() : properties.previousStationKorean(),
-                properties.arrowRight() ? properties.nextStationEnglish() : properties.previousStationEnglish(),
-                properties.arrowRight() ? properties.nextStationChinese() : properties.previousStationChinese(),
-                properties.arrowRight() ? properties.nextStationJapanese() : properties.previousStationJapanese(),
-                1.55F, light);
-    }
+        // Pixel-for-block transcription of the supplied 1280x256 header.png.
+        // Its information group occupies x=376..871 and y=177..209.
+        final boolean right = properties.arrowRight();
+        final String sideLeftKo = right ? properties.previousStationKorean() : properties.nextStationKorean();
+        final String sideLeftEn = right ? properties.previousStationEnglish() : properties.nextStationEnglish();
+        final String sideLeftCh = right ? properties.previousStationChinese() : properties.nextStationChinese();
+        final String sideLeftJp = right ? properties.previousStationJapanese() : properties.nextStationJapanese();
+        final String sideRightKo = right ? properties.nextStationKorean() : properties.previousStationKorean();
+        final String sideRightEn = right ? properties.nextStationEnglish() : properties.previousStationEnglish();
+        final String sideRightCh = right ? properties.nextStationChinese() : properties.previousStationChinese();
+        final String sideRightJp = right ? properties.nextStationJapanese() : properties.previousStationJapanese();
 
-    private static void renderStation(MinecraftClient client, MatrixStack matrices,
-                                      VertexConsumerProvider consumers, String ko, String en,
-                                      String ch, String jp, float x, int light) {
-        renderCenteredText(client, matrices, consumers, ko, x, 2.60F, 0.188F,
-                0.010F, 0xFF111111, light);
-        renderCenteredText(client, matrices, consumers, en, x, 2.48F, 0.188F,
-                0.0045F, 0xFF222222, light);
-        renderCenteredText(client, matrices, consumers, ch, x, 2.40F, 0.188F,
-                0.0035F, 0xFF333333, light);
-        renderCenteredText(client, matrices, consumers, jp, x, 2.34F, 0.188F,
-                0.0035F, 0xFF333333, light);
+        // Previous station: small badge, Korean, English on the same line, translations below.
+        renderTintedQuad(matrices, consumers, HEADER_BADGE, -1.03F, 2.282F,
+                -0.94F, 2.372F, 0.185F, lineColor, light);
+        renderFontText(client, matrices, consumers, "513", -0.985F, 2.313F, 0.188F,
+                0.0025F, 0xFFFFFFFF, ROBOTO_REGULAR, true, light);
+        renderFontText(client, matrices, consumers, sideLeftKo, -0.91F, 2.338F, 0.188F,
+                0.0042F, 0xFF777777, NOTO_SANS_KR, false, light);
+        renderFontText(client, matrices, consumers, sideLeftEn, -0.70F, 2.337F, 0.188F,
+                0.0018F, 0xFF777777, ROBOTO_REGULAR, false, light);
+        renderFontText(client, matrices, consumers, sideLeftCh + "  " + sideLeftJp,
+                -0.70F, 2.306F, 0.188F, 0.00145F, 0xFF888888, ROBOTO_REGULAR, false, light);
+
+        // Current station: dominant badge and Korean name, with compact multilingual copy.
+        renderTintedQuad(matrices, consumers, HEADER_BADGE, -0.53F, 2.268F,
+                -0.39F, 2.408F, 0.185F, lineColor, light);
+        renderFontText(client, matrices, consumers, properties.platformNumber(), -0.46F, 2.316F,
+                0.188F, 0.0043F, 0xFFFFFFFF, ROBOTO_REGULAR, true, light);
+        renderFontText(client, matrices, consumers, properties.currentStationKorean(),
+                -0.36F, 2.350F, 0.188F, 0.0090F, 0xFF111111, NOTO_SANS_KR, false, light);
+        renderFontText(client, matrices, consumers, properties.currentStationEnglish(),
+                -0.01F, 2.350F, 0.188F, 0.0027F, 0xFF111111, ROBOTO_REGULAR, false, light);
+        renderFontText(client, matrices, consumers,
+                properties.currentStationChinese() + "  " + properties.currentStationJapanese(),
+                -0.01F, 2.304F, 0.188F, 0.00175F, 0xFF111111, ROBOTO_REGULAR, false, light);
+
+        renderFontText(client, matrices, consumers, right ? "→" : "←", 0.36F, 2.315F,
+                0.188F, 0.012F, 0xFF111111, ROBOTO_REGULAR, true, light);
+
+        // Next station mirrors the small treatment at the right of the arrow.
+        renderTintedQuad(matrices, consumers, HEADER_BADGE, 0.45F, 2.282F,
+                0.54F, 2.372F, 0.185F, lineColor, light);
+        renderFontText(client, matrices, consumers, "511", 0.495F, 2.313F, 0.188F,
+                0.0025F, 0xFFFFFFFF, ROBOTO_REGULAR, true, light);
+        renderFontText(client, matrices, consumers, sideRightKo, 0.56F, 2.338F, 0.188F,
+                0.0042F, 0xFF111111, NOTO_SANS_KR, false, light);
+        renderFontText(client, matrices, consumers, sideRightEn, 0.75F, 2.337F, 0.188F,
+                0.0018F, 0xFF111111, ROBOTO_REGULAR, false, light);
+        renderFontText(client, matrices, consumers, sideRightCh + "  " + sideRightJp,
+                0.75F, 2.306F, 0.188F, 0.00145F, 0xFF111111, ROBOTO_REGULAR, false, light);
     }
 
     private static void renderCaution(
@@ -431,6 +451,34 @@ final class SeoulBulkyWhiteRenderer {
                 0,
                 light
         );
+        matrices.pop();
+    }
+
+    private static void renderFontText(
+            MinecraftClient client,
+            MatrixStack matrices,
+            VertexConsumerProvider consumers,
+            String value,
+            float x,
+            float y,
+            float z,
+            float scale,
+            int color,
+            Identifier font,
+            boolean centered,
+            int light
+    ) {
+        if (value == null || value.isBlank()) return;
+        final Text text = Text.literal(value).setStyle(Style.EMPTY.withFont(font));
+        final TextRenderer renderer = client.textRenderer;
+        matrices.push();
+        matrices.translate(x, y, z);
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0F));
+        matrices.scale(-scale, -scale, scale);
+        final float textX = centered ? -renderer.getWidth(text) / 2.0F : 0.0F;
+        renderer.draw(text.asOrderedText(), textX, 0.0F, color, false,
+                matrices.peek().getPositionMatrix(), consumers,
+                TextRenderer.TextLayerType.POLYGON_OFFSET, 0, light);
         matrices.pop();
     }
 

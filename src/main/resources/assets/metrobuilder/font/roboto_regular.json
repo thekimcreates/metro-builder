@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "metrobuilder:roboto_regular.ttf",
+      "shift": [0.0, 0.0],
+      "size": 11.0,
+      "oversample": 3.0
+    },
+    {
+      "type": "ttf",
+      "file": "metrobuilder:noto_sans_kr_regular.ttf",
+      "shift": [0.0, 0.0],
+      "size": 11.0,
+      "oversample": 3.0
+    }
+  ]
+}
