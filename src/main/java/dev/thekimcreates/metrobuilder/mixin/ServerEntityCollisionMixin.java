@@ -21,7 +21,11 @@ abstract class ServerEntityCollisionMixin {
     @Unique private static final ThreadLocal<Boolean> METROBUILDER_RECALCULATING =
             ThreadLocal.withInitial(() -> false);
 
-    @Inject(method = "adjustMovementForCollisions", at = @At("HEAD"), cancellable = true)
+    @Inject(
+            method = "adjustMovementForCollisions(Lnet/minecraft/entity/Entity;Lnet/minecraft/util/math/Vec3d;Lnet/minecraft/util/math/Box;Lnet/minecraft/world/World;Ljava/util/List;)Lnet/minecraft/util/math/Vec3d;",
+            at = @At("HEAD"),
+            cancellable = true
+    )
     private static void metrobuilder$serverPsdCollision(Entity entity, Vec3d movement, Box box,
             World world, List<VoxelShape> collisions, CallbackInfoReturnable<Vec3d> callback) {
         if (!(world instanceof ServerWorld serverWorld) || METROBUILDER_RECALCULATING.get()) return;
