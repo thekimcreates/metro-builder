@@ -28,6 +28,7 @@ public final class PrecisionNetworking {
     public static final Identifier PSD_PLACE = MetroBuilder.id("psd_place");
     public static final Identifier PSD_UPDATE_TRANSFORM = MetroBuilder.id("psd_update_transform");
     public static final Identifier PSD_UPDATE_PROPERTIES = MetroBuilder.id("psd_update_properties");
+    public static final Identifier PSD_UPDATE_DOOR = MetroBuilder.id("psd_update_door");
     public static final Identifier PSD_DELETE = MetroBuilder.id("psd_delete");
 
     private static final double MAX_EDIT_DISTANCE_SQUARED = 32.0D * 32.0D;
@@ -190,6 +191,33 @@ public final class PrecisionNetworking {
                             broadcastSnapshot(world);
                             sendSelectionState(player);
                             player.sendMessage(Text.literal("PSD deleted"), true);
+                        }
+                    });
+                }
+        );
+
+        ServerPlayNetworking.registerGlobalReceiver(
+                PSD_UPDATE_DOOR,
+                (server, player, handler, buffer, responseSender) -> {
+                    final UUID objectId = buffer.readUuid();
+                    final double doorValue = buffer.readDouble();
+                    server.execute(() -> {
+                        if (!canUseWand(player) || !Double.isFinite(doorValue)
+                                || doorValue < 0.0D || doorValue > 1.0D) {
+                            return;
+                        }
+
+                        final Optional<PrecisionSelectionManager.Selection> selection =
+                                PrecisionSelectionManager.current(player);
+                        final Optional<PSDObject> psd = PSDManager.find(player.getServerWorld(), objectId);
+                        if (selection.isEmpty() || !selection.get().objectId().equals(objectId)
+                                || psd.isEmpty() || !isWithinEditDistance(player, psd.get().transform())) {
+                            return;
+                        }
+
+                        final ServerWorld world = player.getServerWorld();
+                        if (PSDManager.updateDoorValue(world, objectId, doorValue)) {
+                            broadcastSnapshot(world);
                         }
                     });
                 }

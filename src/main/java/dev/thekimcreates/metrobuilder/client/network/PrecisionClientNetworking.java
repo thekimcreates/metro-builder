@@ -113,4 +113,11 @@ public final class PrecisionClientNetworking {
         buffer.writeUuid(objectId);
         ClientPlayNetworking.send(PrecisionNetworking.PSD_DELETE, buffer);
     }
+
+    public static void updatePsdDoor(UUID objectId, double doorValue) {
+        final PacketByteBuf buffer = PacketByteBufs.create();
+        buffer.writeUuid(objectId);
+        buffer.writeDouble(doorValue);
+        ClientPlayNetworking.send(PrecisionNetworking.PSD_UPDATE_DOOR, buffer);
+    }
 }

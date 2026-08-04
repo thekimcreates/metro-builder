@@ -47,67 +47,55 @@ class Obj:
                 output.write("f " + " ".join(f"{vertex}/{uv}" for vertex, uv in face) + "\n")
 
 
-# All dimensions are in Minecraft blocks. The local origin is the center between
-# the two door leaves. The full assembly is exactly five blocks wide and three
-# blocks tall: 1.5 glass + 1 door + 1 door + 1.5 glass.
-# Moving door leaves run on the rear rail. The fixed side panels occupy a
-# separate front layer, leaving an unobstructed pocket for each opening leaf.
-DOOR_WHITE_BACK, DOOR_WHITE_FRONT = -0.165, 0.035
-DOOR_DARK_BACK, DOOR_DARK_FRONT = -0.125, 0.045
-DOOR_GLASS_BACK, DOOR_GLASS_FRONT = -0.035, 0.000
-DOOR_THRESHOLD_BACK, DOOR_THRESHOLD_FRONT = -0.175, 0.055
+# All dimensions are in Minecraft blocks. The header depth is split at Z=0:
+# sliding doors occupy the rear half and fixed glass panels occupy the front.
+# Both rails are 2/16 block thick and meet without overlapping coplanar faces.
+DOOR_WHITE_BACK, DOOR_WHITE_FRONT = -0.125, 0.000
+DOOR_DARK_BACK, DOOR_DARK_FRONT = -0.115, -0.005
+DOOR_GLASS_BACK, DOOR_GLASS_FRONT = -0.105, -0.020
 
-# The front faces stay ahead of the doors, but the panel bodies extend back to
-# the rear rail so there is no visible air gap when viewed from either side.
-PANEL_WHITE_BACK, PANEL_WHITE_FRONT = -0.020, 0.100
-PANEL_DARK_BACK, PANEL_DARK_FRONT = -0.010, 0.110
-PANEL_GLASS_BACK, PANEL_GLASS_FRONT = -0.005, 0.030
-PANEL_THRESHOLD_BACK, PANEL_THRESHOLD_FRONT = -0.030, 0.115
+PANEL_WHITE_BACK, PANEL_WHITE_FRONT = 0.000, 0.125
+PANEL_DARK_BACK, PANEL_DARK_FRONT = 0.005, 0.120
+PANEL_GLASS_BACK, PANEL_GLASS_FRONT = 0.020, 0.105
 
 # Straight, sharp, single-row header. No rounded or chamfered corners.
 model = Obj("header")
-model.box(-2.5, 2.0, -0.18, 2.5, 3.0, 0.18)
+model.box(-2.5, 2.1, -0.18, 2.5, 3.0, 0.18)
 model.save()
 
 # Fixed white pieces for both 1.5-block side glass panels.
 model = Obj("side_white")
 for x0, x1 in [(-2.5, -2.37), (-1.13, -1.0), (1.0, 1.13), (2.37, 2.5)]:
-    model.box(x0, 0.0, PANEL_WHITE_BACK, x1, 2.0, PANEL_WHITE_FRONT)
+    model.box(x0, 0.0, PANEL_WHITE_BACK, x1, 2.1, PANEL_WHITE_FRONT)
 for x0, x1 in [(-2.5, -1.0), (1.0, 2.5)]:
     model.box(x0, 0.0, PANEL_WHITE_BACK, x1, 0.13, PANEL_WHITE_FRONT)
-    model.box(x0, 1.87, PANEL_WHITE_BACK, x1, 2.0, PANEL_WHITE_FRONT)
+    model.box(x0, 1.97, PANEL_WHITE_BACK, x1, 2.1, PANEL_WHITE_FRONT)
 model.save()
 
 # Dark inset borders around the clean side glass.
 model = Obj("side_dark")
 for x0, x1 in [(-2.37, -1.13), (1.13, 2.37)]:
     border = 0.055
-    model.box(x0, 0.13, PANEL_DARK_BACK, x0 + border, 1.87, PANEL_DARK_FRONT)
-    model.box(x1 - border, 0.13, PANEL_DARK_BACK, x1, 1.87, PANEL_DARK_FRONT)
+    model.box(x0, 0.13, PANEL_DARK_BACK, x0 + border, 1.97, PANEL_DARK_FRONT)
+    model.box(x1 - border, 0.13, PANEL_DARK_BACK, x1, 1.97, PANEL_DARK_FRONT)
     model.box(x0, 0.13, PANEL_DARK_BACK, x1, 0.19, PANEL_DARK_FRONT)
-    model.box(x0, 1.81, PANEL_DARK_BACK, x1, 1.87, PANEL_DARK_FRONT)
+    model.box(x0, 1.91, PANEL_DARK_BACK, x1, 1.97, PANEL_DARK_FRONT)
 model.save()
 
 # Clean, full-height side glass with no writing or decals.
 model = Obj("side_glass")
 for x0, x1 in [(-2.315, -1.185), (1.185, 2.315)]:
-    model.box(x0, 0.19, PANEL_GLASS_BACK, x1, 1.81, PANEL_GLASS_FRONT)
+    model.box(x0, 0.19, PANEL_GLASS_BACK, x1, 1.91, PANEL_GLASS_FRONT)
 model.save()
-
-model = Obj("side_threshold")
-for x0, x1 in [(-2.37, -1.13), (1.13, 2.37)]:
-    model.box(x0, 0.02, PANEL_THRESHOLD_BACK, x1, 0.12, PANEL_THRESHOLD_FRONT)
-model.save()
-
 
 def make_door(side: str, x0: float, x1: float):
     frame = 0.08
 
     white = Obj(f"{side}_door_white")
-    white.box(x0, 0.0, DOOR_WHITE_BACK, x0 + frame, 2.0, DOOR_WHITE_FRONT)
-    white.box(x1 - frame, 0.0, DOOR_WHITE_BACK, x1, 2.0, DOOR_WHITE_FRONT)
+    white.box(x0, 0.0, DOOR_WHITE_BACK, x0 + frame, 2.1, DOOR_WHITE_FRONT)
+    white.box(x1 - frame, 0.0, DOOR_WHITE_BACK, x1, 2.1, DOOR_WHITE_FRONT)
     white.box(x0, 0.0, DOOR_WHITE_BACK, x1, 0.13, DOOR_WHITE_FRONT)
-    white.box(x0, 1.87, DOOR_WHITE_BACK, x1, 2.0, DOOR_WHITE_FRONT)
+    white.box(x0, 1.97, DOOR_WHITE_BACK, x1, 2.1, DOOR_WHITE_FRONT)
     white.save()
 
     inner_x0 = x0 + frame
@@ -115,10 +103,10 @@ def make_door(side: str, x0: float, x1: float):
     dark_border = 0.05
 
     dark = Obj(f"{side}_door_dark")
-    dark.box(inner_x0, 0.13, DOOR_DARK_BACK, inner_x0 + dark_border, 1.87, DOOR_DARK_FRONT)
-    dark.box(inner_x1 - dark_border, 0.13, DOOR_DARK_BACK, inner_x1, 1.87, DOOR_DARK_FRONT)
+    dark.box(inner_x0, 0.13, DOOR_DARK_BACK, inner_x0 + dark_border, 1.97, DOOR_DARK_FRONT)
+    dark.box(inner_x1 - dark_border, 0.13, DOOR_DARK_BACK, inner_x1, 1.97, DOOR_DARK_FRONT)
     dark.box(inner_x0, 0.13, DOOR_DARK_BACK, inner_x1, 0.19, DOOR_DARK_FRONT)
-    dark.box(inner_x0, 1.81, DOOR_DARK_BACK, inner_x1, 1.87, DOOR_DARK_FRONT)
+    dark.box(inner_x0, 1.91, DOOR_DARK_BACK, inner_x1, 1.97, DOOR_DARK_FRONT)
     dark.save()
 
     glass = Obj(f"{side}_door_glass")
@@ -127,15 +115,10 @@ def make_door(side: str, x0: float, x1: float):
         0.19,
         DOOR_GLASS_BACK,
         inner_x1 - dark_border,
-        1.81,
+        1.91,
         DOOR_GLASS_FRONT,
     )
     glass.save()
-
-    threshold = Obj(f"{side}_door_threshold")
-    threshold.box(inner_x0, 0.02, DOOR_THRESHOLD_BACK, inner_x1, 0.12, DOOR_THRESHOLD_FRONT)
-    threshold.save()
-
 
 make_door("left", -1.0, 0.0)
 make_door("right", 0.0, 1.0)
@@ -143,8 +126,8 @@ make_door("right", 0.0, 1.0)
 # Header extensions used when this pack supplies glass wings beside a native
 # two-block door pack. They use the same straight/sharp housing profile.
 model = Obj("header_wings")
-model.box(-2.5, 2.0, -0.18, -1.0, 3.0, 0.18)
-model.box(1.0, 2.0, -0.18, 2.5, 3.0, 0.18)
+model.box(-2.5, 2.1, -0.18, -1.0, 3.0, 0.18)
+model.box(1.0, 2.1, -0.18, 2.5, 3.0, 0.18)
 model.save()
 
 print("generated", len(list(OUT.glob("*.obj"))), "OBJ files")

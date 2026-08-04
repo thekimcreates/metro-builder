@@ -318,6 +318,10 @@ public final class BuilderWandClientController {
                     );
                     ClientPrecisionState.removePsd(psd.id());
                     PrecisionClientNetworking.deletePsd(psd.id());
+                },
+                doorValue -> {
+                    ClientPrecisionState.updatePsdDoorValue(psd.id(), doorValue);
+                    PrecisionClientNetworking.updatePsdDoor(psd.id(), doorValue);
                 }
         ));
     }
