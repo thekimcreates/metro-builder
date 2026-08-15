@@ -2,331 +2,165 @@ package dev.thekimcreates.metrobuilder.client.screen;
 
 import dev.thekimcreates.metrobuilder.precision.PrecisionTransform;
 import dev.thekimcreates.metrobuilder.psd.PSDDisplayProperties;
-import dev.thekimcreates.metrobuilder.psd.PSDPackRegistry;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.texture.NativeImage;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
+import java.io.ByteArrayInputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.function.DoubleConsumer;
 
-/** Non-pausing properties panel for a pending or placed PSD assembly. */
+/** Position editor with a drag-and-drop 1280x256 PNG header uploader. */
 public final class PSDPropertiesScreen extends Screen {
+    private final Identifier packId;
     private final PrecisionTransform initialTransform;
-    private final PSDDisplayProperties initialDisplayProperties;
     private final SaveCallback saveCallback;
-    private final Runnable deleteCallback;
-    private final DoubleConsumer doorValueCallback;
+    private TextFieldWidget xField, yField, zField, rotationField;
+    private byte[] uploadedPng;
+    private String uploadedName;
+    private String message = "";
+    private int dropX, dropY, dropWidth, dropHeight;
 
-    private Identifier selectedPackId;
-    private ButtonWidget packButton;
-    private ButtonWidget arrowButton;
-    private TextFieldWidget xField;
-    private TextFieldWidget yField;
-    private TextFieldWidget zField;
-    private TextFieldWidget yawField;
-    private TextFieldWidget currentKoreanField;
-    private TextFieldWidget currentEnglishField;
-    private TextFieldWidget currentCodeField;
-    private TextFieldWidget previousKoreanField;
-    private TextFieldWidget previousEnglishField;
-    private TextFieldWidget nextKoreanField;
-    private TextFieldWidget nextEnglishField;
-    private TextFieldWidget lineField;
-    private TextFieldWidget platformField;
-    private boolean arrowRight;
-    private String errorMessage = "";
-
-    public PSDPropertiesScreen(
-            String title,
-            Identifier packId,
-            PrecisionTransform initialTransform,
-            PSDDisplayProperties initialDisplayProperties,
-            SaveCallback saveCallback
-    ) {
-        this(
-                title,
-                packId,
-                initialTransform,
-                initialDisplayProperties,
-                saveCallback,
-                null,
-                null
-        );
+    public PSDPropertiesScreen(String title, Identifier packId, PrecisionTransform transform,
+                               PSDDisplayProperties properties, SaveCallback saveCallback) {
+        this(title, packId, transform, properties, saveCallback, null, null);
     }
 
-    public PSDPropertiesScreen(
-            String title,
-            Identifier packId,
-            PrecisionTransform initialTransform,
-            PSDDisplayProperties initialDisplayProperties,
-            SaveCallback saveCallback,
-            Runnable deleteCallback
-    ) {
-        this(title, packId, initialTransform, initialDisplayProperties, saveCallback, deleteCallback, null);
+    public PSDPropertiesScreen(String title, Identifier packId, PrecisionTransform transform,
+                               PSDDisplayProperties properties, SaveCallback saveCallback,
+                               Runnable deleteCallback) {
+        this(title, packId, transform, properties, saveCallback, deleteCallback, null);
     }
 
-    public PSDPropertiesScreen(
-            String title,
-            Identifier packId,
-            PrecisionTransform initialTransform,
-            PSDDisplayProperties initialDisplayProperties,
-            SaveCallback saveCallback,
-            Runnable deleteCallback,
-            DoubleConsumer doorValueCallback
-    ) {
+    public PSDPropertiesScreen(String title, Identifier packId, PrecisionTransform transform,
+                               PSDDisplayProperties properties, SaveCallback saveCallback,
+                               Runnable deleteCallback, DoubleConsumer doorValueCallback) {
         super(Text.literal(title));
-        selectedPackId = Objects.requireNonNull(packId, "packId");
-        this.initialTransform = Objects.requireNonNull(initialTransform, "initialTransform");
-        this.initialDisplayProperties = Objects.requireNonNull(
-                initialDisplayProperties,
-                "initialDisplayProperties"
-        );
-        this.saveCallback = Objects.requireNonNull(saveCallback, "saveCallback");
-        this.deleteCallback = deleteCallback;
-        this.doorValueCallback = doorValueCallback;
-        arrowRight = initialDisplayProperties.arrowRight();
+        this.packId = Objects.requireNonNull(packId);
+        this.initialTransform = Objects.requireNonNull(transform);
+        this.saveCallback = Objects.requireNonNull(saveCallback);
+        this.uploadedPng = Objects.requireNonNull(properties).headerPng();
+        this.uploadedName = properties.hasHeaderPng() ? "Uploaded header.png" : "No header uploaded";
     }
 
     @Override
     protected void init() {
-        final int centerX = width / 2;
-        final int top = Math.max(8, height / 2 - 166);
-        final int leftX = centerX - 216;
-        final int rightX = centerX + 18;
-        final int labelWidth = 78;
-        final int fieldWidth = 136;
+        final int panelWidth = Math.min(650, width - 20);
+        final int panelLeft = (width - panelWidth) / 2;
+        final int top = Math.max(12, (height - 285) / 2);
+        final int leftX = panelLeft + 20;
+        final int fieldX = leftX + 78;
+        final int rightX = panelLeft + panelWidth / 2 + 15;
+        final int fieldWidth = panelWidth / 2 - 115;
 
-        packButton = addDrawableChild(ButtonWidget.builder(
-                        packButtonText(),
-                        button -> cyclePack()
-                )
-                .dimensions(centerX - 105, top + 30, 210, 20)
-                .build());
+        xField = field(fieldX, top + 58, fieldWidth, initialTransform.x());
+        yField = field(fieldX, top + 84, fieldWidth, initialTransform.y());
+        zField = field(fieldX, top + 110, fieldWidth, initialTransform.z());
+        rotationField = field(fieldX, top + 136, fieldWidth, initialTransform.yaw());
 
-        xField = addNumericField(leftX + labelWidth, top + 70, fieldWidth, initialTransform.x());
-        yField = addNumericField(leftX + labelWidth, top + 96, fieldWidth, initialTransform.y());
-        zField = addNumericField(leftX + labelWidth, top + 122, fieldWidth, initialTransform.z());
-        yawField = addNumericField(leftX + labelWidth, top + 148, fieldWidth, initialTransform.yaw());
-
-        currentKoreanField = addTextField(
-                rightX + labelWidth,
-                top + 70,
-                fieldWidth,
-                initialDisplayProperties.currentStationKorean()
-        );
-        currentEnglishField = addTextField(
-                rightX + labelWidth,
-                top + 96,
-                fieldWidth,
-                initialDisplayProperties.currentStationEnglish()
-        );
-        currentCodeField = addTextField(
-                rightX + labelWidth,
-                top + 122,
-                fieldWidth,
-                initialDisplayProperties.currentStationCode()
-        );
-        previousKoreanField = addTextField(
-                rightX + labelWidth,
-                top + 148,
-                fieldWidth,
-                initialDisplayProperties.previousStationKorean()
-        );
-        previousEnglishField = addTextField(
-                rightX + labelWidth,
-                top + 174,
-                fieldWidth,
-                initialDisplayProperties.previousStationEnglish()
-        );
-        nextKoreanField = addTextField(
-                rightX + labelWidth,
-                top + 200,
-                fieldWidth,
-                initialDisplayProperties.nextStationKorean()
-        );
-        nextEnglishField = addTextField(
-                rightX + labelWidth,
-                top + 226,
-                fieldWidth,
-                initialDisplayProperties.nextStationEnglish()
-        );
-        lineField = addTextField(
-                leftX + labelWidth,
-                top + 200,
-                fieldWidth,
-                initialDisplayProperties.lineNumber()
-        );
-        platformField = addTextField(
-                leftX + labelWidth,
-                top + 226,
-                fieldWidth,
-                initialDisplayProperties.platformNumber()
-        );
-
-        arrowButton = addDrawableChild(ButtonWidget.builder(
-                        arrowButtonText(),
-                        button -> {
-                            arrowRight = !arrowRight;
-                            arrowButton.setMessage(arrowButtonText());
-                        }
-                )
-                .dimensions(leftX + labelWidth, top + 252, fieldWidth, 20)
-                .build());
-
-        if (doorValueCallback != null) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("Open Doors"), button -> setDoorValue(1.0D))
-                    .dimensions(centerX - 96, top + 292, 90, 20)
-                    .build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("Close Doors"), button -> setDoorValue(0.0D))
-                    .dimensions(centerX + 6, top + 292, 90, 20)
-                    .build());
-        }
-
-        final int actionY = doorValueCallback == null ? top + 292 : top + 316;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> close())
-                .dimensions(centerX - 96, actionY, 90, 20)
-                .build());
+        dropX = rightX;
+        dropY = top + 58;
+        dropWidth = panelLeft + panelWidth - 20 - rightX;
+        dropHeight = 112;
+        final int actionY = top + 245;
         addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> save())
-                .dimensions(centerX + 6, actionY, 90, 20)
-                .build());
-
-        if (deleteCallback != null) {
-            addDrawableChild(ButtonWidget.builder(
-                            Text.literal("Delete PSD").formatted(Formatting.RED),
-                            button -> deletePsd()
-                    )
-                    .dimensions(centerX - 96, actionY + 24, 192, 20)
-                    .build());
-        }
-
+                .dimensions(width / 2 - 96, actionY, 90, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> close())
+                .dimensions(width / 2 + 6, actionY, 90, 20).build());
         setInitialFocus(xField);
     }
 
-    private void setDoorValue(double value) {
-        if (doorValueCallback != null) {
-            doorValueCallback.accept(value);
+    private TextFieldWidget field(int x, int y, int width, double value) {
+        final TextFieldWidget field = new TextFieldWidget(textRenderer, x, y, width, 20, Text.empty());
+        field.setText(String.format(Locale.ROOT, "%.3f", value));
+        field.setMaxLength(32);
+        return addDrawableChild(field);
+    }
+
+    @Override
+    public void filesDragged(List<Path> paths) {
+        if (paths.size() != 1) {
+            message = "Drop exactly one PNG file";
+            return;
         }
+        loadHeader(paths.get(0));
     }
 
-    private TextFieldWidget addNumericField(int x, int y, int width, double value) {
-        return addTextField(x, y, width, String.format(Locale.ROOT, "%.3f", value));
-    }
-
-    private TextFieldWidget addTextField(int x, int y, int width, String value) {
-        final TextFieldWidget field = new TextFieldWidget(
-                textRenderer,
-                x,
-                y,
-                width,
-                20,
-                Text.empty()
-        );
-        field.setMaxLength(64);
-        field.setText(value);
-        addDrawableChild(field);
-        return field;
-    }
-
-    private void cyclePack() {
-        selectedPackId = PSDPackRegistry.next(selectedPackId);
-        packButton.setMessage(packButtonText());
-    }
-
-    private Text packButtonText() {
-        return Text.literal(PSDPackRegistry.displayName(selectedPackId));
-    }
-
-    private Text arrowButtonText() {
-        return Text.literal(arrowRight ? "Right →" : "← Left");
+    private void loadHeader(Path path) {
+        try {
+            if (!path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".png")) {
+                throw new IllegalArgumentException("File must be a PNG");
+            }
+            final byte[] bytes = Files.readAllBytes(path);
+            if (bytes.length > PSDDisplayProperties.MAX_HEADER_BYTES) {
+                throw new IllegalArgumentException("PNG must be 2 MiB or smaller");
+            }
+            try (NativeImage image = NativeImage.read(new ByteArrayInputStream(bytes))) {
+                if (image.getWidth() != 1280 || image.getHeight() != 256) {
+                    throw new IllegalArgumentException("PNG must be exactly 1280x256 pixels");
+                }
+            }
+            uploadedPng = bytes;
+            uploadedName = path.getFileName().toString();
+            message = "Header ready to save";
+        } catch (Exception exception) {
+            message = exception.getMessage() == null ? "Could not read PNG" : exception.getMessage();
+        }
     }
 
     private void save() {
         try {
-            final PrecisionTransform updatedTransform = new PrecisionTransform(
-                    Double.parseDouble(xField.getText()),
-                    Double.parseDouble(yField.getText()),
-                    Double.parseDouble(zField.getText()),
-                    initialTransform.pitch(),
-                    Float.parseFloat(yawField.getText()),
-                    initialTransform.roll(),
-                    initialTransform.scaleX(),
-                    initialTransform.scaleY(),
-                    initialTransform.scaleZ()
-            );
-            final PSDDisplayProperties updatedDisplayProperties = new PSDDisplayProperties(
-                    currentKoreanField.getText(),
-                    currentEnglishField.getText(),
-                    currentCodeField.getText(),
-                    previousKoreanField.getText(),
-                    previousEnglishField.getText(),
-                    nextKoreanField.getText(),
-                    nextEnglishField.getText(),
-                    lineField.getText(),
-                    platformField.getText(),
-                    arrowRight
-            );
-            saveCallback.save(selectedPackId, updatedTransform, updatedDisplayProperties);
+            final PrecisionTransform transform = new PrecisionTransform(
+                    Double.parseDouble(xField.getText()), Double.parseDouble(yField.getText()),
+                    Double.parseDouble(zField.getText()), initialTransform.pitch(),
+                    Float.parseFloat(rotationField.getText()), initialTransform.roll(),
+                    initialTransform.scaleX(), initialTransform.scaleY(), initialTransform.scaleZ());
+            saveCallback.save(packId, transform, new PSDDisplayProperties(uploadedPng));
             close();
         } catch (IllegalArgumentException exception) {
-            errorMessage = "Enter valid finite position and rotation numbers";
+            message = "Enter valid finite positioning values";
         }
-    }
-
-    private void deletePsd() {
-        if (deleteCallback == null) {
-            return;
-        }
-        deleteCallback.run();
-        close();
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderBackground(context, mouseX, mouseY, delta);
-        final int centerX = width / 2;
-        final int top = Math.max(8, height / 2 - 166);
-        final int leftX = centerX - 216;
-        final int rightX = centerX + 18;
-        final int panelBottom = deleteCallback == null
-                ? top + (doorValueCallback == null ? 326 : 350)
-                : top + (doorValueCallback == null ? 350 : 374);
+        final int panelWidth = Math.min(650, width - 20);
+        final int left = (width - panelWidth) / 2;
+        final int top = Math.max(12, (height - 285) / 2);
+        context.fill(left, top, left + panelWidth, top + 280, 0xEE101010);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, top + 12, 0xFFFFFF);
+        context.drawTextWithShadow(textRenderer, "Positioning", left + 20, top + 36, 0xFFFFFF);
+        context.drawTextWithShadow(textRenderer, "Upload Header", left + panelWidth / 2 + 15,
+                top + 36, 0xFFFFFF);
+        drawLabel(context, "X", left + 20, top + 64);
+        drawLabel(context, "Y", left + 20, top + 90);
+        drawLabel(context, "Z", left + 20, top + 116);
+        drawLabel(context, "Rotation", left + 20, top + 142);
 
-        context.fill(centerX - 244, top - 10, centerX + 244, panelBottom, 0xE0101010);
-        context.drawCenteredTextWithShadow(textRenderer, title, centerX, top, 0xFFFFFF);
-        context.drawCenteredTextWithShadow(textRenderer, "PSD Pack", centerX, top + 17, 0xD0D0D0);
-
-        drawLabel(context, "X", leftX, top + 76);
-        drawLabel(context, "Y", leftX, top + 102);
-        drawLabel(context, "Z", leftX, top + 128);
-        drawLabel(context, "Yaw", leftX, top + 154);
-        drawLabel(context, "Line", leftX, top + 206);
-        drawLabel(context, "Platform", leftX, top + 232);
-        drawLabel(context, "Arrow", leftX, top + 258);
-
-        drawLabel(context, "Current KR", rightX, top + 76);
-        drawLabel(context, "Current EN", rightX, top + 102);
-        drawLabel(context, "Code", rightX, top + 128);
-        drawLabel(context, "Previous KR", rightX, top + 154);
-        drawLabel(context, "Previous EN", rightX, top + 180);
-        drawLabel(context, "Next KR", rightX, top + 206);
-        drawLabel(context, "Next EN", rightX, top + 232);
-
-        if (!errorMessage.isEmpty()) {
-            context.drawCenteredTextWithShadow(
-                    textRenderer,
-                    Text.literal(errorMessage),
-                    centerX,
-                    top + 280,
-                    0xFF5555
-            );
+        final boolean hover = mouseX >= dropX && mouseX <= dropX + dropWidth
+                && mouseY >= dropY && mouseY <= dropY + dropHeight;
+        context.fill(dropX, dropY, dropX + dropWidth, dropY + dropHeight,
+                hover ? 0xFF383838 : 0xFF242424);
+        context.drawBorder(dropX, dropY, dropWidth, dropHeight, hover ? 0xFFFFFFFF : 0xFF777777);
+        context.drawCenteredTextWithShadow(textRenderer, "Drop a PNG file here",
+                dropX + dropWidth / 2, dropY + 31, 0xFFFFFF);
+        context.drawCenteredTextWithShadow(textRenderer, "Required: 1280 x 256 px",
+                dropX + dropWidth / 2, dropY + 51, 0xAAAAAA);
+        context.drawCenteredTextWithShadow(textRenderer, uploadedName,
+                dropX + dropWidth / 2, dropY + 77, uploadedPng.length > 0 ? 0x55FF55 : 0xAAAAAA);
+        if (!message.isBlank()) {
+            context.drawCenteredTextWithShadow(textRenderer, message, width / 2, top + 222,
+                    message.contains("ready") ? 0x55FF55 : 0xFF5555);
         }
-
         super.render(context, mouseX, mouseY, delta);
     }
 
@@ -334,17 +168,10 @@ public final class PSDPropertiesScreen extends Screen {
         context.drawTextWithShadow(textRenderer, label, x, y, 0xD0D0D0);
     }
 
-    @Override
-    public boolean shouldPause() {
-        return false;
-    }
+    @Override public boolean shouldPause() { return false; }
 
     @FunctionalInterface
     public interface SaveCallback {
-        void save(
-                Identifier packId,
-                PrecisionTransform transform,
-                PSDDisplayProperties displayProperties
-        );
+        void save(Identifier packId, PrecisionTransform transform, PSDDisplayProperties properties);
     }
 }

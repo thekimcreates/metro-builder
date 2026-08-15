@@ -12,6 +12,11 @@ public final class MetroBuilderItems {
             MetroBuilder.id("builder_wand"),
             new BuilderWandItem(new Item.Settings())
     );
+    public static final Item SEOUL_LINES_5_7_TEMPERED_WHITE = Registry.register(
+            Registries.ITEM,
+            MetroBuilder.id("seoul_lines_5_7_tempered_white"),
+            new BuilderWandItem(new Item.Settings())
+    );
 
     private MetroBuilderItems() {
     }

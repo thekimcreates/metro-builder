@@ -2,96 +2,53 @@ package dev.thekimcreates.metrobuilder.psd;
 
 import net.minecraft.nbt.NbtCompound;
 
+import java.util.Arrays;
 import java.util.Objects;
 
-/**
- * Editable passenger-information and label data carried by one PSD assembly.
- *
- * <p>The data is intentionally independent of the active pack. Packs that do
- * not use a field simply ignore it, while a later pack can reuse the same
- * saved values without a world migration.</p>
- */
-public record PSDDisplayProperties(
-        String currentStationKorean,
-        String currentStationEnglish,
-        String currentStationCode,
-        String previousStationKorean,
-        String previousStationEnglish,
-        String nextStationKorean,
-        String nextStationEnglish,
-        String lineNumber,
-        String platformNumber,
-        boolean arrowRight
-) {
-    private static final int MAX_TEXT_LENGTH = 64;
+/** The uploaded 1280x256 PNG used by one PSD header. */
+public record PSDDisplayProperties(byte[] headerPng) {
+    public static final int MAX_HEADER_BYTES = 2 * 1024 * 1024;
 
     public PSDDisplayProperties {
-        currentStationKorean = clean(currentStationKorean);
-        currentStationEnglish = clean(currentStationEnglish);
-        currentStationCode = clean(currentStationCode);
-        previousStationKorean = clean(previousStationKorean);
-        previousStationEnglish = clean(previousStationEnglish);
-        nextStationKorean = clean(nextStationKorean);
-        nextStationEnglish = clean(nextStationEnglish);
-        lineNumber = clean(lineNumber);
-        platformNumber = clean(platformNumber);
+        headerPng = Objects.requireNonNullElseGet(headerPng, () -> new byte[0]).clone();
+        if (headerPng.length > MAX_HEADER_BYTES) {
+            throw new IllegalArgumentException("Header PNG exceeds 2 MiB");
+        }
+    }
+
+    @Override
+    public byte[] headerPng() {
+        return headerPng.clone();
+    }
+
+    public boolean hasHeaderPng() {
+        return headerPng.length > 0;
     }
 
     public static PSDDisplayProperties defaults() {
-        return new PSDDisplayProperties(
-                "김포공항",
-                "Gimpo Int'l Airport",
-                "512",
-                "송정",
-                "Songjeong",
-                "개화산",
-                "Gaehwasan",
-                "5",
-                "1-1",
-                true
-        );
+        return new PSDDisplayProperties(new byte[0]);
     }
 
     public NbtCompound toNbt() {
         final NbtCompound nbt = new NbtCompound();
-        nbt.putString("CurrentStationKorean", currentStationKorean);
-        nbt.putString("CurrentStationEnglish", currentStationEnglish);
-        nbt.putString("CurrentStationCode", currentStationCode);
-        nbt.putString("PreviousStationKorean", previousStationKorean);
-        nbt.putString("PreviousStationEnglish", previousStationEnglish);
-        nbt.putString("NextStationKorean", nextStationKorean);
-        nbt.putString("NextStationEnglish", nextStationEnglish);
-        nbt.putString("LineNumber", lineNumber);
-        nbt.putString("PlatformNumber", platformNumber);
-        nbt.putBoolean("ArrowRight", arrowRight);
+        nbt.putByteArray("HeaderPng", headerPng);
         return nbt;
     }
 
     public static PSDDisplayProperties fromNbt(NbtCompound nbt) {
         Objects.requireNonNull(nbt, "nbt");
-        final PSDDisplayProperties defaults = defaults();
-        return new PSDDisplayProperties(
-                get(nbt, "CurrentStationKorean", defaults.currentStationKorean),
-                get(nbt, "CurrentStationEnglish", defaults.currentStationEnglish),
-                get(nbt, "CurrentStationCode", defaults.currentStationCode),
-                get(nbt, "PreviousStationKorean", defaults.previousStationKorean),
-                get(nbt, "PreviousStationEnglish", defaults.previousStationEnglish),
-                get(nbt, "NextStationKorean", defaults.nextStationKorean),
-                get(nbt, "NextStationEnglish", defaults.nextStationEnglish),
-                get(nbt, "LineNumber", defaults.lineNumber),
-                get(nbt, "PlatformNumber", defaults.platformNumber),
-                !nbt.contains("ArrowRight") || nbt.getBoolean("ArrowRight")
-        );
+        return new PSDDisplayProperties(nbt.contains("HeaderPng")
+                ? nbt.getByteArray("HeaderPng") : new byte[0]);
     }
 
-    private static String get(NbtCompound nbt, String key, String fallback) {
-        return nbt.contains(key) ? nbt.getString(key) : fallback;
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof PSDDisplayProperties properties
+                && Arrays.equals(headerPng, properties.headerPng);
     }
 
-    private static String clean(String value) {
-        final String result = Objects.requireNonNullElse(value, "").strip();
-        return result.length() <= MAX_TEXT_LENGTH
-                ? result
-                : result.substring(0, MAX_TEXT_LENGTH);
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(headerPng);
     }
 }

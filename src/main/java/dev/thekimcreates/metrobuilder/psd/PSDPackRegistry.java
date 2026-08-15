@@ -17,6 +17,8 @@ public final class PSDPackRegistry {
     public static final Identifier TJMETRO_BMT_RENDERER = MetroBuilder.id("tjmetro_bmt");
     public static final Identifier SEOUL_BULKY_WHITE_RENDERER = MetroBuilder.id("seoul_bulky_white");
     public static final Identifier SEOUL_BULKY_WHITE_PACK = MetroBuilder.id("seoul_bulky_white");
+    public static final Identifier SEOUL_LINES_5_7_TEMPERED_WHITE_PACK =
+            MetroBuilder.id("seoul_lines_5_7_tempered_white");
 
     private static final Map<Identifier, PSDPackDefinition> PACKS = new LinkedHashMap<>();
 
@@ -77,6 +79,7 @@ public final class PSDPackRegistry {
     private static void addBuiltIns(Map<Identifier, PSDPackDefinition> destination) {
         destination.put(PSDObject.DEFAULT_PACK_ID, builtInTjMetroDefault());
         destination.put(SEOUL_BULKY_WHITE_PACK, builtInSeoulBulkyWhite());
+        destination.put(SEOUL_LINES_5_7_TEMPERED_WHITE_PACK, builtInSeoulLines57TemperedWhite());
     }
 
     private static PSDPackDefinition builtInTjMetroDefault() {
@@ -98,6 +101,20 @@ public final class PSDPackRegistry {
                 SEOUL_BULKY_WHITE_PACK,
                 PSDPackDefinition.CURRENT_FORMAT_VERSION,
                 "Seoul Metro Bulky White",
+                SEOUL_BULKY_WHITE_RENDERER,
+                "",
+                null,
+                null,
+                1.0F,
+                1.0F
+        );
+    }
+
+    private static PSDPackDefinition builtInSeoulLines57TemperedWhite() {
+        return new PSDPackDefinition(
+                SEOUL_LINES_5_7_TEMPERED_WHITE_PACK,
+                PSDPackDefinition.CURRENT_FORMAT_VERSION,
+                "Seoul Metro Lines 5, 7 Tempered White",
                 SEOUL_BULKY_WHITE_RENDERER,
                 "",
                 null,
