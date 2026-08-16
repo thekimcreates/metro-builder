@@ -1,8 +1,0 @@
-{
-  "format_version": 1,
-  "name": "TJMetro BMT Default",
-  "renderer": "metrobuilder:tjmetro_bmt",
-  "required_mod": "tjmetro",
-  "volume": 1.0,
-  "pitch": 1.0
-}
