@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.thekimcreates.curvify.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "curvify.refmap.json",
+  "client": [
+    "RailModifierScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
