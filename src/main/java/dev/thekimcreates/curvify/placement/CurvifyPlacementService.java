@@ -1,5 +1,6 @@
 package dev.thekimcreates.curvify.placement;
 
+import dev.thekimcreates.curvify.Curvify;
 import dev.thekimcreates.curvify.state.CurvifyPlacementState;
 import dev.thekimcreates.curvify.state.PlacementRecord;
 import dev.thekimcreates.curvify.util.BlockStateUtil;
@@ -61,7 +62,7 @@ public final class CurvifyPlacementService {
             } catch (PlacementException exception) {
                 player.sendMessage(Text.literal(exception.getMessage()), true);
             } catch (RuntimeException exception) {
-                player.sendMessage(Text.translatable("curvify.invalid_config"), true);
+                reportFailure(player, "place PSDs on rail " + railId, exception);
             }
         }, () -> player.sendMessage(Text.translatable("curvify.rail_not_found"), true));
     }
@@ -94,7 +95,7 @@ public final class CurvifyPlacementService {
             player.sendMessage(Text.translatable("curvify.deleted"), true);
         } catch (RuntimeException exception) {
             restoreSnapshot(world, rollback);
-            player.sendMessage(Text.translatable("curvify.invalid_config"), true);
+            reportFailure(player, "delete PSDs from rail " + railId, exception);
         }
     }
 
@@ -273,6 +274,14 @@ public final class CurvifyPlacementService {
 
     private static boolean canEdit(ServerPlayerEntity player) {
         return player.isCreative() || player.hasPermissionLevel(2);
+    }
+
+    private static void reportFailure(ServerPlayerEntity player, String action, RuntimeException exception) {
+        Curvify.LOGGER.error("Failed to {}", action, exception);
+        final String reason = exception.getMessage() == null || exception.getMessage().isBlank()
+                ? exception.getClass().getSimpleName()
+                : exception.getMessage();
+        player.sendMessage(Text.translatable("curvify.placement_failed", reason), true);
     }
 
     private static void findRail(ServerWorld world, String railId, java.util.function.Consumer<Rail> found, Runnable missing) {

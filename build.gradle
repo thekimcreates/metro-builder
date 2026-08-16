@@ -27,7 +27,7 @@ dependencies {
     if (localMtr.exists()) {
         modImplementation files(localMtr)
     } else {
-        modImplementation 'maven.modrinth:XKPAmI6u:C1FESmTv'
+        modImplementation 'maven.modrinth:XKPAmI6u:Xurz5xWy'
     }
 
     testImplementation platform('org.junit:junit-bom:5.10.2')

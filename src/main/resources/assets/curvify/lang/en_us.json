@@ -19,6 +19,7 @@
   "curvify.deleted": "Curvify placement deleted",
   "curvify.rail_not_found": "MTR rail not found",
   "curvify.invalid_config": "Invalid PSD configuration",
+  "curvify.placement_failed": "Curvify placement failed: %s",
   "curvify.collision": "Placement blocked by %s existing block(s)",
   "curvify.no_existing": "No Curvify placement exists on this rail",
   "curvify.near": "Near",
